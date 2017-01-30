@@ -169,7 +169,7 @@ tld_interactive_find_and_replace(Application_Links *app,
                 
                 buffer_seek_string_backward(app, &buffer, pos, 0, find_bar->string.str, find_bar->string.size, &new_pos);
                 if (new_pos < 0) {
-                    buffer_seek_string_backward(app, &buffer, buffer.size, 0, find_bar->string.str, find_bar->string.size, &new_pos);
+                    buffer_seek_string_backward(app, &buffer, buffer.size - find_bar->string.size, 0, find_bar->string.str, find_bar->string.size, &new_pos);
                     if (new_pos < 0) {
                         match.min = 0;
                         match.max = 0;
