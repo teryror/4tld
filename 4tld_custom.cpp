@@ -763,22 +763,27 @@ HOOK_SIG(global_settings) {
     Theme_Color colors[] = {
         {Stag_Default, TLD_COLORS_WHITE},
         
-        {Stag_Back,           TLD_COLORS_BLACK},
-        {Stag_Pop1,           TLD_COLORS_BLUE},
-        {Stag_Pop2,           TLD_COLORS_GREEN},
-        {Stag_Margin,         0x282828},
-        {Stag_Margin_Hover,   0x282828},
-        {Stag_At_Cursor,      0x202020},
-        {Stag_Comment,        TLD_COLORS_YELLOW},
-        {Stag_Keyword,        TLD_COLORS_WHITE},
-        {Stag_Str_Constant,   TLD_COLORS_GRAY},
-        {Stag_Char_Constant,  TLD_COLORS_WHITE},
-        {Stag_Int_Constant,   TLD_COLORS_WHITE},
-        {Stag_Float_Constant, TLD_COLORS_WHITE},
-        {Stag_Bool_Constant,  TLD_COLORS_WHITE},
-        {Stag_Preproc,        TLD_COLORS_GREEN},
-        {Stag_Include,        TLD_COLORS_GRAY}
+        {Stag_Back,              TLD_COLORS_BLACK},
+        {Stag_Pop1,              TLD_COLORS_BLUE},
+        {Stag_Pop2,              TLD_COLORS_GREEN},
+        {Stag_Margin,            TLD_COLORS_BLACK},
+        {Stag_Margin_Hover,      TLD_COLORS_BLACK},
+        {Stag_At_Cursor,         TLD_COLORS_BLACK},
+        {Stag_Comment,           TLD_COLORS_YELLOW},
+        {Stag_Keyword,           TLD_COLORS_WHITE},
+        {Stag_Str_Constant,      TLD_COLORS_GRAY},
+        {Stag_Char_Constant,     TLD_COLORS_WHITE},
+        {Stag_Int_Constant,      TLD_COLORS_WHITE},
+        {Stag_Float_Constant,    TLD_COLORS_WHITE},
+        {Stag_Bool_Constant,     TLD_COLORS_WHITE},
+        {Stag_Preproc,           TLD_COLORS_GREEN},
+        {Stag_Include,           TLD_COLORS_GRAY},
+        {Stag_Highlight_Junk,    TLD_COLORS_BLACK},
+        {Stag_Special_Character, TLD_COLORS_RED},
+        {Stag_Highlight,         TLD_COLORS_BLUE},
+        {Stag_At_Highlight,      TLD_COLORS_BLACK},
     };
+    
     int count = ArrayCount(colors);
     set_theme_colors(app, colors, count);
     
