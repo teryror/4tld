@@ -193,9 +193,6 @@ tld_interactive_find_and_replace(Application_Links *app,
                     buffer_replace_range(app, &buffer, match.min, match.max, replace_bar->string.str, replace_bar->string.size);
                     buffer = get_buffer(app, view->buffer_id, AccessAll);
                     
-                    match.min = 0;
-                    match.max = 0;
-                    
                     if (search_backwards) {
                         goto previous_match;
                     } else {
