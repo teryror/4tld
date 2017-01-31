@@ -815,10 +815,17 @@ OPEN_FILE_HOOK_SIG(file_settings) {
             
             buffer_set_setting(app, &buffer, BufferSetting_WrapLine, true);
             buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, true);
-        } else if (match_ss(ext, make_lit_string("rs"))) {
+        } else if (match_ss(ext, make_lit_string("rs")) ||
+                   match_ss(ext, make_lit_string("java")) ||
+                   match_ss(ext, make_lit_string("cs"))) {
             insert_header_comment = opened_file_is_new;
             
             buffer_set_setting(app, &buffer, BufferSetting_Lex, true);
+            
+            buffer_set_setting(app, &buffer, BufferSetting_WrapLine, false);
+            buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
+        } else if (match_ss(ext, make_lit_string("xml"))) {
+            buffer_set_setting(app, &buffer, BufferSetting_Lex, false);
             
             buffer_set_setting(app, &buffer, BufferSetting_WrapLine, false);
             buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
@@ -828,6 +835,7 @@ OPEN_FILE_HOOK_SIG(file_settings) {
             buffer_set_setting(app, &buffer, BufferSetting_Lex, false);
             
             buffer_set_setting(app, &buffer, BufferSetting_WrapLine, true);
+            buffer_set_setting(app, &buffer, BufferSetting_WrapPosition, 90);
             buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
         }
     }
