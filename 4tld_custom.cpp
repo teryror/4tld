@@ -835,7 +835,7 @@ OPEN_FILE_HOOK_SIG(file_settings) {
             buffer_set_setting(app, &buffer, BufferSetting_Lex, false);
             
             buffer_set_setting(app, &buffer, BufferSetting_WrapLine, true);
-            buffer_set_setting(app, &buffer, BufferSetting_WrapPosition, 90);
+            buffer_set_setting(app, &buffer, BufferSetting_WrapPosition, 950);
             buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
         }
     }
