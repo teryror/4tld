@@ -1,7 +1,7 @@
 # 4tld
 My customization code for [4coder](http://4coder.net) by Allen Webster.
 
-## Overvier
+## Overview
 * **4tld_custom.cpp** is the main file that I actually build.
   It defines most of my custom commands and binds them in a modal set up.
 * **4tld\_find\_and\_replace.cpp** is a drop-in file containing functionality
