@@ -82,7 +82,6 @@ CUSTOM_COMMAND_SIG(toggle_or_create_panel) {
     
     if (view_count <= 1) {
         exec_command(app, open_panel_vsplit);
-        exec_command(app, cmdid_interactive_open);
         exec_command(app, hide_scrollbar);
     } else {
         exec_command(app, change_active_panel);
@@ -878,26 +877,19 @@ void set_key_maps(Bind_Helper *context) {
     // bind(context, '`', MDFR_ALT, execute_any_command); // TODO: Port the metaprogram
     
     bind(context, key_f1, MDFR_NONE, interactive_find_file);
+    bind(context, key_f2, MDFR_NONE, list_all_functions_current_buffer);
+    bind(context, key_f5, MDFR_NONE, git_quick_save);
+    bind(context, key_f11, MDFR_NONE, maximize_panel);
     
     // TODO: Unused key bindings
-    bind(context, key_f2, MDFR_NONE, no_op);
     bind(context, key_f3, MDFR_NONE, no_op);
     bind(context, key_f4, MDFR_NONE, no_op);
-    
-    // TODO: Rethink the build workflow
-    // bind(context, key_f5, MDFR_NONE, save_and_build);
-    // bind(context, key_f6, MDFR_NONE, goto_first_error);
-    // bind(context, key_f7, MDFR_NONE, goto_next_error);
-    // bind(context, key_f8, MDFR_NONE, close_build_panel);
-    bind(context, key_f5, MDFR_NONE, git_quick_save);
     bind(context, key_f6, MDFR_NONE, no_op);
     bind(context, key_f7, MDFR_NONE, no_op);
     bind(context, key_f8, MDFR_NONE, no_op);
-    
-    bind(context, key_f9, MDFR_NONE, goto_jump_at_cursor);
-    bind(context, key_f10, MDFR_NONE, no_op); // TODO: Unused key binding
-    bind(context, key_f11, MDFR_NONE, maximize_panel);
-    bind(context, key_f12, MDFR_NONE, no_op); // TODO: Unused key binding
+    bind(context, key_f9, MDFR_NONE, no_op);
+    bind(context, key_f10, MDFR_NONE, no_op);
+    bind(context, key_f12, MDFR_NONE, no_op);
     
     bind(context, key_esc, MDFR_NONE, enter_command_mode);
     bind(context, ' ', MDFR_NONE, modal_space);
