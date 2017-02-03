@@ -1,5 +1,5 @@
 /******************************************************************************
-File: tld_4coder_custom.cpp
+File: 4tld_custom.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or implied; use this code at your own risk.
 ******************************************************************************/
@@ -752,7 +752,7 @@ DefineModalKey(modal_double_quote, no_op);
 DefineModalKey(modal_pipe, no_op);
 DefineModalKey(modal_open_angle, no_op);
 DefineModalKey(modal_close_angle, no_op);
-DefineModalKey(modal_question_mark, no_op);
+DefineModalKey(modal_question_mark, tld_interactive_find_and_replace_new);
 
 HOOK_SIG(global_settings) {
     init_memory(app);
@@ -865,6 +865,8 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, 'o', MDFR_ALT, open_file);
     bind(context, 'p', MDFR_ALT, cmdid_interactive_switch_buffer);
     bind(context, 'q', MDFR_ALT, cmdid_kill_buffer);
+    // NOTE: Since alpha-4-0-15, 4coder doesn't seem to close on Alt-F4 properly
+    bind(context, 'Q', MDFR_ALT, exit_4coder);
     bind(context, 'r', MDFR_ALT, replace_range);
     bind(context, 's', MDFR_ALT, smart_save);
     bind(context, 'v', MDFR_ALT, paste);
