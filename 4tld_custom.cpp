@@ -442,66 +442,14 @@ CUSTOM_COMMAND_SIG(interactive_find_file) {
             View_Summary view = get_active_view(app, AccessAll);
             Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessAll);
             
-            String extension = file_extension(make_string(buffer.file_name, buffer.file_name_len));
-            if (extension.str) {
-                char *header_extensions[] = {
-                    "hpp", "hin", "h"
-                };
-                char *c_extensions[] = {
-                    "cpp", "cin", "c"
-                };
-                
-                int extension_count = 0;
-                char **extensions = 0;
-                
-                if (match(extension, make_lit_string("h")) ||
-                    match(extension, make_lit_string("hpp")) ||
-                    match(extension, make_lit_string("hin")))
-                {
-                    extension_count = ArrayCount(c_extensions);
-                    extensions = c_extensions;
-                }
-                else if (match(extension, make_lit_string("c")) ||
-                         match(extension, make_lit_string("cpp")) ||
-                         match(extension, make_lit_string("cin")) ||
-                         match(extension, make_lit_string("inl")))
-                {
-                    extension_count = ArrayCount(header_extensions);
-                    extensions = header_extensions;
-                }
-                else {
-                    hints.prompt = make_lit_string("Error: Unknown file extension!!");
-                    in = get_user_input(app, EventOnAnyKey, EventOnButton);
-                    return;
-                }
-                
-                int max_extension_length = 3;
-                int space = (int)(buffer.file_name_len + max_extension_length);
-                
-                String file_name_stem = make_string(buffer.file_name, (int)(extension.str - buffer.file_name), 0);
-                // TODO: This allocation bothers me -- we got by without allocation everywhere else!
-                String test_file_name = make_string(memory_allocate(app, space), 0, space);
-                
-                for (int i = 0; i < extension_count; ++i)
-                {
-                    test_file_name.size = 0;
-                    append(&test_file_name, file_name_stem);
-                    append(&test_file_name, extensions[i]);
-                    
-                    if (file_exists(app, test_file_name.str, test_file_name.size)) {
-                        view_open_file(app, &view, expand_str(test_file_name), false);
-                        
-                        memory_free(app, test_file_name.str, space);
-                        return;
-                    }
-                }
-                
-                memory_free(app, test_file_name.str, space);
-                test_file_name = {0};
+            Buffer_Summary new_buffer = {0};
+            if (get_cpp_matching_file(app, buffer, &new_buffer)) {
+                view_set_buffer(app, &view, new_buffer.buffer_id, 0);
+            } else {
+                hints.prompt = make_lit_string("Error: File not found!");
+                in = get_user_input(app, EventOnAnyKey, EventOnButton);
             }
             
-            hints.prompt = make_lit_string("Error: File not found!");
-            in = get_user_input(app, EventOnAnyKey, EventOnButton);
             return;
         } break;
         case 'r': {
