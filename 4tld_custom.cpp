@@ -778,6 +778,7 @@ OPEN_FILE_HOOK_SIG(file_settings) {
             buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
         } else if (match_ss(ext, make_lit_string("4proj"))) {
             // TODO: Handle 4coder Project files
+            exec_command(app, open_all_code_recursive);
         } else {
             buffer_set_setting(app, &buffer, BufferSetting_Lex, false);
             
@@ -811,6 +812,7 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, 'h', MDFR_ALT, tld_interactive_find_and_replace_selection);
     bind(context, 'n', MDFR_ALT, new_file);
     bind(context, 'o', MDFR_ALT, open_file);
+    bind(context, 'O', MDFR_ALT, open_all_code);
     bind(context, 'p', MDFR_ALT, cmdid_interactive_switch_buffer);
     bind(context, 'q', MDFR_ALT, cmdid_kill_buffer);
     // NOTE: Since alpha-4-0-15, 4coder doesn't seem to close on Alt-F4 properly
