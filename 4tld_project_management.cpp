@@ -22,7 +22,7 @@ tld_Project tld_project_load_from_buffer(Application_Links *app, int32_t buffer_
     int pos = 0;
     
     Buffer_Summary buffer = get_buffer(app, buffer_id, AccessAll);
-    result.working_directory = path_of_directory(make_string(buffer.file_name, buffer.file_name_len));
+    result.working_directory = path_of_directory(make_string(buffer.file_name, buffer.file_name_len)); // TODO(Test): Wouldn't this crash if we close the buffer?
     
     char chunk[1024];
     int chunk_size = sizeof(chunk);
@@ -39,17 +39,36 @@ tld_Project tld_project_load_from_buffer(Application_Links *app, int32_t buffer_
     return result;
 }
 
+void tld_project_open_source_files(Application_Links *app, tld_Project *project) {
+    
+}
+
 // TODO: Make a function for opening all files in a tld_Project.source_directory
 
 #ifdef TLDPM_IMPLEMENT_COMMANDS
 #undef TLDPM_IMPLEMENT_COMMANDS
 
-// TODO: Make a function for initializing this stuff
 static tld_Project tld_current_project = {0};
 static void *__tld_current_project_memory_internal = {0};
 static Partition tld_current_project_memory = {0};
 
-// TODO: Make a command for running the tld_Project.build_configurations_current
-// TODO: Make a command for switching changing the tld_Project.build_configurations_current
+void tld_project_memory_init() {
+    int32_t size = 8 * 1024;
+    __tld_current_project_memory_internal = malloc(size);
+    tld_current_project_memory = make_part(__tld_current_project_memory_internal, size);
+}
+
+void tld_project_memory_free() {
+    free(__tld_current_project_memory_internal);
+    tld_current_project_memory = {0};
+}
+
+CUSTOM_COMMAND_SIG(tld_current_project_build) {
+    // TODO: Stub
+}
+
+CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
+    // TODO: Stub
+}
 
 #endif

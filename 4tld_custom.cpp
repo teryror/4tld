@@ -780,8 +780,8 @@ OPEN_FILE_HOOK_SIG(file_settings) {
             buffer_set_setting(app, &buffer, BufferSetting_WrapLine, false);
             buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
         } else if (match_ss(ext, make_lit_string("4proj"))) {
-            // TODO: Handle 4coder Project files
             tld_current_project = tld_project_load_from_buffer(app, buffer.buffer_id, &tld_current_project_memory);
+            tld_project_open_source_files(app, &tld_current_project_memory);
         } else {
             buffer_set_setting(app, &buffer, BufferSetting_Lex, false);
             
@@ -834,13 +834,15 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, key_f1, MDFR_NONE, interactive_find_file);
     bind(context, key_f2, MDFR_NONE, list_all_functions_current_buffer);
     bind(context, key_f5, MDFR_NONE, git_quick_save);
+    // TODO: bind(context, key_f5, MDFR_SHIFT, git_add_current_file);
+    bind(context, key_f7, MDFR_NONE, tld_current_project_build);
+    bind(context, key_f7, MDFR_SHIFT, tld_current_project_change_build_config);
     bind(context, key_f11, MDFR_NONE, maximize_panel);
     
     // TODO: Unused key bindings
     bind(context, key_f3, MDFR_NONE, no_op);
     bind(context, key_f4, MDFR_NONE, no_op);
     bind(context, key_f6, MDFR_NONE, no_op);
-    bind(context, key_f7, MDFR_NONE, no_op);
     bind(context, key_f8, MDFR_NONE, no_op);
     bind(context, key_f9, MDFR_NONE, no_op);
     bind(context, key_f10, MDFR_NONE, no_op);
@@ -956,6 +958,10 @@ void set_key_maps(Bind_Helper *context) {
 }
 
 extern "C" int32_t get_bindings(void *data, int32_t size) {
+    // NOTE: We'll be using this for the entire run of the program
+    // We could free on shutdown, but the OS will clean it up anyway
+    tld_project_memory_init();
+    
     Bind_Helper context_local = begin_bind_helper(data, size);
     Bind_Helper *context = &context_local;
     
