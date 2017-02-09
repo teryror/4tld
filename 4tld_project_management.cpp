@@ -122,8 +122,16 @@ void tld_project_memory_free() {
     tld_current_project_memory = {0};
 }
 
+// TODO(Polish): This is pretty nasty in terms of view management.
 CUSTOM_COMMAND_SIG(tld_current_project_build) {
-    // TODO: Stub
+    String build_command = tld_current_project.build_configurations[tld_current_project.build_configurations_current];
+    
+    View_Summary view = get_active_view(app, AccessAll);
+    exec_system_command(app, &view, buffer_identifier(expand_str(make_lit_string("*build*"))),
+                        tld_current_project.working_directory.str,
+                        tld_current_project.working_directory.size,
+                        build_command.str, build_command.size,
+                        CLI_OverlapWithConflict | CLI_CursorAtEnd);
 }
 
 CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
