@@ -3,6 +3,7 @@ File: 4tld_project_management.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or implied; use this code at your own risk.
 ******************************************************************************/
+#include "4tld_user_interface.h"
 
 #ifndef TLDPM_BUILD_CONFIGURATIONS_CAPACITY
 #define TLDPM_BUILD_CONFIGURATIONS_CAPACITY 16
@@ -126,12 +127,17 @@ void tld_project_memory_free() {
     tld_current_project_memory = {0};
 }
 
-// TODO(Polish): This is pretty nasty in terms of view management.
 CUSTOM_COMMAND_SIG(tld_current_project_build) {
     String build_command = tld_current_project.build_configurations[tld_current_project.build_configurations_current];
     
-    View_Summary view = get_active_view(app, AccessAll);
-    exec_system_command(app, &view, buffer_identifier(expand_str(make_lit_string("*build*"))),
+    Buffer_Summary buffer;
+    View_Summary view;
+    tld_display_buffer_by_name(app, make_lit_string("*build*"), &buffer, &view, true, AccessAll);
+    
+    Buffer_Identifier buffer_id = {0};
+    buffer_id.id = buffer.buffer_id;
+    
+    exec_system_command(app, &view, buffer_id,
                         tld_current_project.working_directory.str,
                         tld_current_project.working_directory.size,
                         build_command.str, build_command.size,

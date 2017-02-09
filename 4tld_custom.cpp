@@ -5,6 +5,7 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 ******************************************************************************/
 
 #include "4coder_default_include.cpp"
+#include "4tld_user_interface.h"
 
 #define TLDFR_IMPLEMENT_COMMMANDS
 #include "4tld_find_and_replace.cpp"
@@ -506,11 +507,17 @@ CUSTOM_COMMAND_SIG(interactive_find_file) {
 }
 
 CUSTOM_COMMAND_SIG(git_quick_save) {
-    String hot_directory = make_fixed_width_string(hot_directory_space);
-    hot_directory.size = directory_get_hot(app, hot_directory.str, hot_directory.memory_size);
+    String working_directory;
+    
+    if (tld_current_project.working_directory.str) {
+        working_directory = tld_current_project.working_directory;
+    } else {
+        working_directory = make_fixed_width_string(hot_directory_space);
+        working_directory.size = directory_get_hot(app, working_directory.str, working_directory.memory_size);
+    }
     
     Query_Bar hot_dir_hint;
-    hot_dir_hint.prompt = hot_directory;
+    hot_dir_hint.prompt = working_directory;
     hot_dir_hint.string = make_lit_string("");
     
     char git_command_buffer[68];
@@ -535,10 +542,14 @@ CUSTOM_COMMAND_SIG(git_quick_save) {
         git_command_buffer[size] = '"';
         git_command_buffer[size + 1] = 0;
         
-        View_Summary view = get_active_view(app, AccessAll);
-        exec_system_command(app, &view, buffer_identifier(expand_str(make_lit_string("*git*"))),
-                            hot_directory.str, hot_directory.size, git_command.str, size + 1,
-                            CLI_OverlapWithConflict | CLI_CursorAtEnd);
+        View_Summary view;
+        Buffer_Summary buffer;
+        tld_display_buffer_by_name(app, make_lit_string("*terminal*"), &buffer, &view, false, AccessAll);
+        
+        Buffer_Identifier buffer_id = {0};
+        buffer_id.id = buffer.buffer_id;
+        
+        exec_system_command(app, &view, buffer_id, working_directory.str, working_directory.size, git_command.str, size + 1, CLI_OverlapWithConflict | CLI_CursorAtEnd);
     }
 }
 
@@ -552,10 +563,14 @@ CUSTOM_COMMAND_SIG(execute_any_cli_in_default_buffer) {
     String hot_directory = make_fixed_width_string(hot_directory_space);
     hot_directory.size = directory_get_hot(app, hot_directory.str, hot_directory.memory_size);
     
-    uint32_t access = AccessAll;
-    View_Summary view = get_active_view(app, access);
+    View_Summary view;
+    Buffer_Summary buffer;
+    tld_display_buffer_by_name(app, make_lit_string("*terminal*"), &buffer, &view, false, AccessAll);
     
-    exec_system_command(app, &view, buffer_identifier(expand_str(make_lit_string("*terminal*"))), hot_directory.str, hot_directory.size, bar_cmd.string.str, bar_cmd.string.size, CLI_OverlapWithConflict | CLI_CursorAtEnd);
+    Buffer_Identifier buffer_id = {0};
+    buffer_id.id = buffer.buffer_id;
+    
+    exec_system_command(app, &view, buffer_id, hot_directory.str, hot_directory.size, bar_cmd.string.str, bar_cmd.string.size, CLI_OverlapWithConflict | CLI_CursorAtEnd);
 }
 
 CUSTOM_COMMAND_SIG(execute_last_cli_in_default_buffer) {
@@ -569,10 +584,14 @@ CUSTOM_COMMAND_SIG(execute_last_cli_in_default_buffer) {
     String hot_directory = make_fixed_width_string(hot_directory_space);
     hot_directory.size = directory_get_hot(app, hot_directory.str, hot_directory.memory_size);
     
-    uint32_t access = AccessAll;
-    View_Summary view = get_active_view(app, access);
+    View_Summary view;
+    Buffer_Summary buffer;
+    tld_display_buffer_by_name(app, make_lit_string("*terminal*"), &buffer, &view, false, AccessAll);
     
-    exec_system_command(app, &view, buffer_identifier(expand_str(make_lit_string("*terminal*"))), hot_directory.str, hot_directory.size, bar_cmd.string.str, bar_cmd.string.size, CLI_OverlapWithConflict | CLI_CursorAtEnd);
+    Buffer_Identifier buffer_id = {0};
+    buffer_id.id = buffer.buffer_id;
+    
+    exec_system_command(app, &view, buffer_id, hot_directory.str, hot_directory.size, bar_cmd.string.str, bar_cmd.string.size, CLI_OverlapWithConflict | CLI_CursorAtEnd);
 }
 
 // NOTE: This is a stub that forces me to use the edit mode
