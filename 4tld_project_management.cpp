@@ -40,7 +40,7 @@ tld_Project tld_project_load_from_buffer(Application_Links *app, int32_t buffer_
 }
 
 void tld_project_open_source_files(Application_Links *app, tld_Project *project) {
-    
+    // TODO: Stub
 }
 
 // TODO: Make a function for opening all files in a tld_Project.source_directory
