@@ -11,10 +11,12 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   `tld_interactive_find_and_replace(5)`, or first
   `#define TLDFR_IMPLEMENT_COMMANDS`, to get custom commands that
   you can bind directly.
-* **4tld\_project\_management.cpp** is WIP, contains the bare bones of my
-  own project management system, and is not to be used yet.
-  I'm building this because I don't particularly like some of the detail-level
-  design decisions Allen made in the provided system.
+* **4tld\_project\_management.cpp** is another drop-in file containing a simple
+  system similar to *4coder\_project\_commands.cpp*, with some minor changes
+  according to my personal preference. After including this file you need to call
+  `tld_project_load_from_buffer(3)` to get a `tld_Project`.
+  If you wish to use the predefined commands, you need to first `#define
+  TLDPM_IMPLEMENT_COMMANDS`, and call `tld_project_memory_init()` on startup.
 * **build.bat** builds 4tld_custom.cpp using `pushd` and `popd`, so that
   this repository can be cloned into the directory containing 4ed.exe,
   buildsuper.bat, etc.
