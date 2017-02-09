@@ -49,11 +49,11 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
             get_view_next(app, view, AccessAll);
             set_active_view(app, view);
         }
-        view_set_buffer(app, view, buffer->buffer_id, 0);
     } else if (prefer_inactive_view) {
         *view = open_view(app, view, ViewSplit_Right);
         view_set_setting(app, view, ViewSetting_ShowScrollbar, false);
     }
+    view_set_buffer(app, view, buffer->buffer_id, 0);
 }
 
 #endif
