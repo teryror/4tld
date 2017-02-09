@@ -8,6 +8,10 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 #define TLDPM_BUILD_CONFIGURATIONS_CAPACITY 16
 #endif
 
+#ifndef TLDPM_SOURCE_EXTENSIONS
+#define TLDPM_SOURCE_EXTENSIONS { "cpp", "hpp", "c", "h", "cc", "rs" }
+#endif
+
 struct tld_Project {
     String working_directory;
     String source_directory;
@@ -98,11 +102,11 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
     return result;
 }
 
-void tld_project_open_source_files(Application_Links *app, tld_Project *project) {
-    // TODO: Stub
+void tld_project_open_source_files(Application_Links *app, tld_Project *project, Partition *memory) {
+    char *extension_list[] = TLDPM_SOURCE_EXTENSIONS;
+    int32_t extension_count = sizeof(extension_list) / sizeof(extension_list[0]);
+    open_all_files_with_extension(app, memory, extension_list, extension_count, true);
 }
-
-// TODO: Make a function for opening all files in a tld_Project.source_directory
 
 #ifdef TLDPM_IMPLEMENT_COMMANDS
 #undef TLDPM_IMPLEMENT_COMMANDS
