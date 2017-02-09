@@ -3,13 +3,18 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
 
 ## Overview
 * **4tld_custom.cpp** is the main file that I actually build.
-  It defines most of my custom commands and binds them in a modal set up.
+  It defines all the trivial or highly specific custom commands and binds them
+  all in a modal set up. This isn't really intended to be reused.
 * **4tld\_find\_and\_replace.cpp** is a drop-in file containing functionality
   for a search that works more like what you see in a GUI editor.
   You can `#include` this in your own customization code and call
   `tld_interactive_find_and_replace(5)`, or first
   `#define TLDFR_IMPLEMENT_COMMANDS`, to get custom commands that
   you can bind directly.
+* **4tld\_project\_management.cpp** is WIP, contains the bare bones of my
+  own project management system, and is not to be used yet.
+  I'm building this because I don't particularly like some of the detail-level
+  design decisions Allen made in the provided system.
 * **build.bat** builds 4tld_custom.cpp using `pushd` and `popd`, so that
   this repository can be cloned into the directory containing 4ed.exe,
   buildsuper.bat, etc.
@@ -23,8 +28,6 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   corresponding command in an array, and execute it. I also had small program to
   accompany it, generating the array at compile time, with no extra work required.
   I would love to bring that back in a more robust fashion.
-* I would like to reuse bits of Allen's project management code to make my own
-  system. There's some design decisions there that I disagree with.
 * The existing `git_quick_save` command is pretty useful, and I would like to do
   more to make version control invisible.
 * I might experiment with the frame rendering hooks and scroll rules to add an

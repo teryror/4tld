@@ -9,6 +9,9 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 #define TLDFR_IMPLEMENT_COMMMANDS
 #include "4tld_find_and_replace.cpp"
 
+#define TLDPM_IMPLEMENT_COMMANDS
+#include "4tld_project_management.cpp"
+
 #define TLD_COLORS_WHITE 0xE0E0E0
 #define TLD_COLORS_GRAY  0x909090
 #define TLD_COLORS_BLACK 0x181818
@@ -778,7 +781,7 @@ OPEN_FILE_HOOK_SIG(file_settings) {
             buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
         } else if (match_ss(ext, make_lit_string("4proj"))) {
             // TODO: Handle 4coder Project files
-            exec_command(app, open_all_code_recursive);
+            tld_current_project = tld_project_load_from_buffer(app, buffer.buffer_id, &tld_current_project_memory);
         } else {
             buffer_set_setting(app, &buffer, BufferSetting_Lex, false);
             
@@ -789,7 +792,7 @@ OPEN_FILE_HOOK_SIG(file_settings) {
     }
     
     if (insert_header_comment) {
-        buffer_replace_range(app, &buffer, 0, 0, literal("\nNotice: No warranty is offered or  implied; use this code at your own risk.\n******************************************************************************/\n\n"));
+        buffer_replace_range(app, &buffer, 0, 0, literal("\nNotice: No warranty is offered or implied; use this code at your own risk.\n******************************************************************************/\n\n"));
         buffer_replace_range(app, &buffer, 0, 0, literal("\nAuthor: Tristan Dannenberg"));
         buffer_replace_range(app, &buffer, 0, 0, buffer.buffer_name, buffer.buffer_name_len);
         buffer_replace_range(app, &buffer, 0, 0, literal("/******************************************************************************\nFile: "));
