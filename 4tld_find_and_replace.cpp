@@ -226,6 +226,7 @@ tld_interactive_find_and_replace(Application_Links *app,
         
         if (match.max - match.min > 0) {
             view_set_highlight(app, view, match.min, match.max, true);
+            exec_command(app, center_view);
         } else {
             view_set_highlight(app, view, 0, 0, false);
         }
