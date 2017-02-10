@@ -69,7 +69,13 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
     int pos = 0, beginning_of_line = 0;
     
     Buffer_Summary buffer = get_buffer(app, buffer_id, AccessAll);
-    result.working_directory = path_of_directory(make_string(buffer.file_name, buffer.file_name_len)); // TODO(Test): Wouldn't this crash if we close the buffer?
+    result.working_directory = path_of_directory(make_string(buffer.file_name, buffer.file_name_len));
+    
+    String working_directory_copy;
+    working_directory_copy.str = (char *)partition_allocate(memory, result.working_directory.size);
+    working_directory_copy.memory_size = result.working_directory.size;
+    copy_partial_ss(&working_directory_copy, result.working_directory);
+    result.working_directory = working_directory_copy;
     
     char current_line[2048];
     
@@ -104,6 +110,8 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
 }
 
 void tld_project_open_source_files(Application_Links *app, tld_Project *project, Partition *memory) {
+    // TODO(Bugfix): Actually use the tld_Project.source_directory
+    
     char *extension_list[] = TLDPM_SOURCE_EXTENSIONS;
     int32_t extension_count = sizeof(extension_list) / sizeof(extension_list[0]);
     open_all_files_with_extension(app, memory, extension_list, extension_count, true);
