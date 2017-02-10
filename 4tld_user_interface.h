@@ -48,6 +48,10 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
         if (prefer_inactive_view) {
             get_view_next(app, view, AccessAll);
             set_active_view(app, view);
+            
+            if (!view->exists) {
+                *view = get_view_first(app, AccessAll);
+            }
         }
     } else if (prefer_inactive_view) {
         *view = open_view(app, view, ViewSplit_Right);
