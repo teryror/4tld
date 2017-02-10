@@ -102,19 +102,31 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
         tld_project_parse_line(&result, current_line, current_line_length, memory);
     }
     
-    if (result.source_directory.str == 0) {
-        result.source_directory = result.working_directory;
-    }
-    
     return result;
 }
 
 void tld_project_open_source_files(Application_Links *app, tld_Project *project, Partition *memory) {
-    // TODO(Bugfix): Actually use the tld_Project.source_directory
-    
     char *extension_list[] = TLDPM_SOURCE_EXTENSIONS;
     int32_t extension_count = sizeof(extension_list) / sizeof(extension_list[0]);
-    open_all_files_with_extension(app, memory, extension_list, extension_count, true);
+    
+    int32_t max_size = partition_remaining(memory);
+    Temp_Memory temp = begin_temp_memory(memory);
+    char *scratch_space = push_array(memory, char, max_size);
+    
+    String dir = make_string_cap(scratch_space, 0, max_size);
+    append_ss(&dir, project->working_directory);
+    if (project->source_directory.str) {
+        // TODO(Polish): Get directory_cd to work
+        // it only seems to work with literal("..") as the relative path
+        
+        append_ss(&dir, project->source_directory);
+        if (dir.str[dir.size - 1] != '/' && dir.str[dir.size - 1] != '\\') {
+            append_sc(&dir, "/");
+        }
+    }
+    
+    open_all_files_with_extension_internal(app, dir, extension_list, extension_count, false);
+    end_temp_memory(temp);
 }
 
 #ifdef TLDPM_IMPLEMENT_COMMANDS
@@ -136,6 +148,8 @@ void tld_project_memory_free() {
 }
 
 CUSTOM_COMMAND_SIG(tld_current_project_build) {
+    if (!tld_current_project.working_directory.str) return;
+    
     String build_command = tld_current_project.build_configurations[tld_current_project.build_configurations_current];
     
     Buffer_Summary buffer;
