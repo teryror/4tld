@@ -41,15 +41,6 @@ CUSTOM_COMMAND_SIG(enter_edit_mode) {
     set_theme_colors(app, colors, count);
 }
 
-CUSTOM_COMMAND_SIG(save_and_build) {
-    exec_command(app, auto_tab_whole_file);
-    exec_command(app, cmdid_save);
-    
-    // TODO: Do we want to keep the build panel?
-    // Seems like quite the hassle :/
-    exec_command(app, build_in_build_panel);
-}
-
 CUSTOM_COMMAND_SIG(smart_save) {
     View_Summary view = get_active_view(app, AccessProtected);
     Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessProtected);
@@ -408,6 +399,7 @@ CUSTOM_COMMAND_SIG(write_or_goto_position){
 }
 
 // NOTE: Hackish workaround for the lack of the new_file_hook
+// TODO: Is this fixed in 4-0-16?
 static bool opened_file_is_new = false;
 CUSTOM_COMMAND_SIG(new_file) {
     opened_file_is_new = true;
@@ -501,8 +493,7 @@ CUSTOM_COMMAND_SIG(interactive_find_file) {
             }
         }
         
-        hints.prompt = make_lit_string("Error: File not found!");
-        in = get_user_input(app, EventOnAnyKey, EventOnButton);
+        tld_show_error("File not found!");
     }
 }
 

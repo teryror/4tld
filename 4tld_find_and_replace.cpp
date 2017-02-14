@@ -35,47 +35,7 @@ sharing this code:
     theory stuff for that)
   - others?
 ******************************************************************************/
-
-static int32_t
-tld_requery_user_string(Application_Links *app, Query_Bar *bar) {
-    // NOTE: This assumes that the passed Query_Bar is initialized and
-    // that start_query_bar was already called on it.
-    // This function will act like query_user_string, but it will not
-    // force the Query_Bar to display, allowing the user to reenter input
-    // without displaying the query multiple times.
-    
-    User_Input in;
-    int32_t success = 1;
-    int32_t good_character = 0;
-    
-    while (true) {
-        in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
-        if (in.abort) {
-            success = 0;
-            break;
-        }
-        
-        good_character = 0;
-        if (key_is_unmodified(&in.key) && in.key.character != 0) {
-            good_character = 1;
-        }
-        
-        if (in.type == UserInputKey) {
-            if (in.key.keycode == '\n' || in.key.keycode == '\t') {
-                break;
-            } else if (in.key.keycode == key_back) {
-                if (bar->string.size > 0) {
-                    --bar->string.size;
-                }
-            } else if (good_character) {
-                append_s_char(&bar->string, in.key.character);
-            }
-        }
-    }
-    
-    terminate_with_null(&bar->string);
-    return success;
-}
+#include "4tld_user_interface.h"
 
 void
 tld_interactive_find_and_replace(Application_Links *app,

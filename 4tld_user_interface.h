@@ -60,4 +60,57 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
     view_set_buffer(app, view, buffer->buffer_id, 0);
 }
 
+// Allow the user to reenter a string into an already open query bar.
+// Note that start_query_bar has to be called before this function.
+static int32_t
+tld_requery_user_string(Application_Links *app, Query_Bar *bar) {
+    User_Input in;
+    int32_t success = 1;
+    int32_t good_character = 0;
+    
+    while (true) {
+        in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
+        if (in.abort) {
+            success = 0;
+            break;
+        }
+        
+        good_character = 0;
+        if (key_is_unmodified(&in.key) && in.key.character != 0) {
+            good_character = 1;
+        }
+        
+        if (in.type == UserInputKey) {
+            if (in.key.keycode == '\n' || in.key.keycode == '\t') {
+                break;
+            } else if (in.key.keycode == key_back) {
+                if (bar->string.size > 0) {
+                    --bar->string.size;
+                }
+            } else if (good_character) {
+                append_s_char(&bar->string, in.key.character);
+            }
+        }
+    }
+    
+    terminate_with_null(&bar->string);
+    return success;
+}
+
+// Displays the specified message in a Query_Bar and waits for user input,
+// so as to make sure that the user acknowledged the message at least.
+static void
+tld_show_acknowledged_message(Application_Links *app, String title, String message) {
+    Query_Bar message_bar = {0};
+    message_bar.prompt = title;
+    message_bar.string = message;
+    start_query_bar(app, &message_bar, 0);
+    
+    User_Input in = get_user_input(app, EventOnAnyKey, EventOnButton);
+}
+
+#define tld_show_error(message) tld_show_acknowledged_message(app, make_lit_string("ERROR: "), make_lit_string(message));
+
+#define tld_show_warning(message) tld_show_acknowledged_message(app, make_lit_string("WARNING: "), make_lit_string(message));
+
 #endif
