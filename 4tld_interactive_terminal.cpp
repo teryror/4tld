@@ -47,7 +47,7 @@ tld_change_directory(String *dir, String rel_path) {
             // Do nothing -- we're already in the current directory
         } else {
             append_ss(&_dir, rel_path_element);
-            append_ss(&_dir, make_lit_string("/"));
+            append_s_char(&_dir, '/');
         }
     }
     
@@ -66,8 +66,8 @@ tld_change_directory(String *dir, String rel_path) {
     return success;
 }
 
-static bool
-tld_iterm_handle_command(Application_Links *app, String cmd, String *dir) {
+static void
+tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Identifier buffer_id, String cmd, String *dir) {
     char *cmd_end = cmd.str + cmd.size;
     while (cmd.str < cmd_end && *cmd.str == ' ') {
         ++cmd.str;
@@ -89,12 +89,21 @@ tld_iterm_handle_command(Application_Links *app, String cmd, String *dir) {
         if (!tld_change_directory(dir, make_string(cmd.str, param_len)))
         {
             tld_show_error("Directory does not exist!");
+        } else {
+            // TODO: Do this manually using a file list, which we can use for
+            // better formatting and auto complete
+            exec_system_command(app, view, buffer_id, dir->str, dir->size,
+                                literal("dir /OGN"),
+                                CLI_OverlapWithConflict | CLI_CursorAtEnd);
         }
-        
-        return true;
+    } else if (match_sc(ident, "home")) {
+        // TODO: Return to home directory
+    } else if (match_sc(ident, "open")) {
+        // TODO: Open the specified file
+    } else {
+        exec_system_command(app, view, buffer_id, dir->str, dir->size, expand_str(cmd),
+                            CLI_OverlapWithConflict | CLI_CursorAtEnd);
     }
-    
-    return false;
 }
 
 CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
@@ -120,13 +129,37 @@ CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
     start_query_bar(app, &cmd_bar, 0);
     start_query_bar(app, &dir_bar, 0);
     
-    while (tld_requery_user_string(app, &cmd_bar)) {
-        if (!tld_iterm_handle_command(app, cmd_bar.string, &dir_bar.prompt)) {
-            exec_system_command(app, &view, buffer_id,
-                                expand_str(dir_bar.string), expand_str(cmd_bar.string),
-                                CLI_OverlapWithConflict | CLI_CursorAtEnd);
+    while (true) {
+        User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
+        
+        if (in.abort) return;
+        
+        bool good_character = false;
+        if (key_is_unmodified(&in.key) && in.key.character != 0) {
+            good_character = true;
         }
         
-        cmd_bar.string.size = 0;
+        if (in.type == UserInputKey) {
+            if (in.key.keycode == '\n') {
+                tld_iterm_handle_command(app, &view, buffer_id,
+                                         cmd_bar.string, &dir_bar.prompt);
+                cmd_bar.string.size = 0;
+            } else if (in.key.keycode == key_up) {
+            } else if (in.key.keycode == key_down) {
+                // TODO: Command history
+            } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
+                // TODO: Paste from clipboard
+            } else if (in.key.keycode == '\t') {
+                // TODO: Auto complete
+            } else if (in.key.keycode == key_back) {
+                if (cmd_bar.string.size > 0) {
+                    --cmd_bar.string.size;
+                }
+            } else if (in.key.keycode == key_del) {
+                cmd_bar.string.size = 0;
+            } else if (good_character) {
+                append_s_char(&cmd_bar.string, in.key.character);
+            }
+        }
     }
 }
