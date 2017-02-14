@@ -536,11 +536,7 @@ CUSTOM_COMMAND_SIG(git_quick_save) {
     start_query_bar(app, &message_bar, 0);
     start_query_bar(app, &hot_dir_hint, 0);
     if (tld_requery_user_string(app, &message_bar)) {
-        int size = message_bar.prompt.size + 1;
-        for (; size < git_command.memory_size; ++size) {
-            if (git_command_buffer[size] == 0) break;
-        }
-        
+        int size = message_bar.prompt.size + 1 + message_bar.string.size;
         git_command_buffer[size] = '"';
         git_command_buffer[size + 1] = 0;
         
