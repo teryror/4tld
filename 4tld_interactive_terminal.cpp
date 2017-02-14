@@ -5,6 +5,16 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 ******************************************************************************/
 #include "4tld_user_interface.h"
 
+#ifndef TLDIT_COMMAND_HISTORY_CAPACITY
+#define TLDIT_COMMAND_HISTORY_CAPACITY 4
+#endif
+
+static struct {
+    String commands[TLDIT_COMMAND_HISTORY_CAPACITY];
+    int32_t size;
+    int32_t offset;
+} tld_iterm_command_history = {0};
+
 // NOTE: This is only needed because directory_cd(6) is broken...
 static bool
 tld_change_directory(String *dir, String rel_path) {
@@ -143,12 +153,26 @@ CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
         
         if (in.type == UserInputKey) {
             if (in.key.keycode == '\n') {
+                if (tld_iterm_command_history.commands[tld_iterm_command_history.offset].str)
+                    free(tld_iterm_command_history.commands[tld_iterm_command_history.offset].str);
+                
+                int32_t offset = tld_iterm_command_history.offset;
+                
+                tld_iterm_command_history.commands[offset] = {0};
+                tld_iterm_command_history.commands[offset].str = (char*)malloc(cmd_bar.string.size);
+                tld_iterm_command_history.commands[offset].memory_size = cmd_bar.string.size;
+                copy_partial_ss(&tld_iterm_command_history.commands[offset], cmd_bar.string);
+                
+                tld_iterm_command_history.offset = (offset + 1) % TLDIT_COMMAND_HISTORY_CAPACITY;
+                if (tld_iterm_command_history.size < TLDIT_COMMAND_HISTORY_CAPACITY)
+                    ++tld_iterm_command_history.size;
+                
                 tld_iterm_handle_command(app, &view, buffer_id,
                                          cmd_bar.string, &dir_bar.prompt);
                 cmd_bar.string.size = 0;
             } else if (in.key.keycode == key_up) {
             } else if (in.key.keycode == key_down) {
-                // TODO: Command history
+                // TODO: Traverse command history
             } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
                 // TODO: Paste from clipboard
             } else if (in.key.keycode == '\t') {
