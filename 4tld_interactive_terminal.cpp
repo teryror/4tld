@@ -68,6 +68,8 @@ tld_change_directory(String *dir, String rel_path) {
 
 static void
 tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Identifier buffer_id, String cmd, String *dir) {
+    String original_command = cmd;
+    
     char *cmd_end = cmd.str + cmd.size;
     while (cmd.str < cmd_end && *cmd.str == ' ') {
         ++cmd.str;
@@ -101,7 +103,7 @@ tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Iden
     } else if (match_sc(ident, "open")) {
         // TODO: Open the specified file
     } else {
-        exec_system_command(app, view, buffer_id, dir->str, dir->size, expand_str(cmd),
+        exec_system_command(app, view, buffer_id, dir->str, dir->size, expand_str(original_command),
                             CLI_OverlapWithConflict | CLI_CursorAtEnd);
     }
 }
