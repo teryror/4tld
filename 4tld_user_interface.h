@@ -107,6 +107,7 @@ tld_show_acknowledged_message(Application_Links *app, String title, String messa
     start_query_bar(app, &message_bar, 0);
     
     User_Input in = get_user_input(app, EventOnAnyKey, EventOnButton);
+    end_query_bar(app, &message_bar, 0);
 }
 
 #define tld_show_error(message) tld_show_acknowledged_message(app, make_lit_string("ERROR: "), make_lit_string(message));
