@@ -17,6 +17,8 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   `tld_project_load_from_buffer(3)` to get a `tld_Project`.
   If you wish to use the predefined commands, you need to first `#define
   TLDPM_IMPLEMENT_COMMANDS`, and call `tld_project_memory_init()` on startup.
+* **4tld\_interactive\_terminal.cpp** contains a fairly basic interactive terminal.
+  This is Work-In-Progress.
 * **4tld\_user\_interface.h** is intended for utility functions pertaining to
   view management, scroll rules, query bars and other miscellaneous UI features.
   Note that both 4tld\_custom.cpp and 4tld\_find\_and\_replace.cpp depend on it.

@@ -13,6 +13,8 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 #define TLDPM_IMPLEMENT_COMMANDS
 #include "4tld_project_management.cpp"
 
+#include "4tld_interactive_terminal.cpp"
+
 #define TLD_COLORS_WHITE 0xE0E0E0
 #define TLD_COLORS_GRAY  0x909090
 #define TLD_COLORS_BLACK 0x181818
@@ -637,7 +639,7 @@ DefineModalKey(modal_0, no_op);
 DefineModalKey(modal_dash, no_op);
 DefineModalKey(modal_equals, no_op);
 
-DefineModalKey(modal_tilde, execute_last_cli_in_default_buffer);
+DefineModalKey(modal_tilde, tld_iterm_session_start);
 DefineModalKey(modal_exclamation_mark, no_op);
 DefineModalKey(modal_at, no_op);
 DefineModalKey(modal_pound, no_op);
