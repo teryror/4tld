@@ -46,6 +46,15 @@ CUSTOM_COMMAND_SIG(smart_save) {
     Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessProtected);
     
     if (buffer.exists) {
+        String ext = file_extension(make_string(buffer.file_name, buffer.file_name_len));
+        if (match_sc(ext, "4proj")) {
+            exec_command(app, cmdid_save);
+            tld_current_project =
+                tld_project_reload_from_buffer(app, buffer.buffer_id,
+                                               &tld_current_project_memory);
+            return;
+        }
+        
         if (buffer.is_lexed) {
             exec_command(app, auto_tab_whole_file);
         }

@@ -105,6 +105,12 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
     return result;
 }
 
+tld_Project
+tld_project_reload_from_buffer(Application_Links *app, int32_t buffer_id, Partition *memory) {
+    memory->pos = 0;
+    return tld_project_load_from_buffer(app, buffer_id, memory);
+}
+
 void tld_project_open_source_files(Application_Links *app, tld_Project *project, Partition *memory) {
     char *extension_list[] = TLDPM_SOURCE_EXTENSIONS;
     int32_t extension_count = sizeof(extension_list) / sizeof(extension_list[0]);
