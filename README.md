@@ -19,8 +19,7 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   TLDPM_IMPLEMENT_COMMANDS`, and call `tld_project_memory_init()` on startup.
 * **4tld\_user\_interface.h** is intended for utility functions pertaining to
   view management, scroll rules, query bars and other miscellaneous UI features.
-  Right now it only contains a single function used by both 4tld\_custom.cpp and
-  4tld\_project\_management.cpp.
+  Note that both 4tld\_custom.cpp and 4tld\_find\_and\_replace.cpp depend on it.
 * **build.bat** builds 4tld_custom.cpp using `pushd` and `popd`, so that
   this repository can be cloned into the directory containing 4ed.exe,
   buildsuper.bat, etc.
