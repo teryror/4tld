@@ -142,6 +142,9 @@ tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Iden
     // TODO: Insert whitespace to make text beneath query bars visible
 }
 
+static char tld_iterm_working_directory_space[1024] = {0};
+static String tld_iterm_working_directory = {0};
+
 CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
     Buffer_Summary buffer;
     View_Summary view;
@@ -150,11 +153,12 @@ CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
     Buffer_Identifier buffer_id = {0};
     buffer_id.id = buffer.buffer_id;
     
-    char dir_space[1024];
-    String dir = make_fixed_width_string(dir_space);
-    tld_iterm_get_home_directory(app, &dir);
+    if (tld_iterm_working_directory.str == 0) {
+        tld_iterm_working_directory = make_fixed_width_string(tld_iterm_working_directory_space);
+        tld_iterm_get_home_directory(app, &tld_iterm_working_directory);
+    }
     Query_Bar dir_bar = {0};
-    dir_bar.prompt = dir;
+    dir_bar.prompt = tld_iterm_working_directory;
     
     char cmd_space[1024];
     String cmd = make_fixed_width_string(cmd_space);
@@ -199,6 +203,7 @@ CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
                 
                 tld_iterm_handle_command(app, &view, buffer_id,
                                          cmd_bar.string, &dir_bar.prompt);
+                tld_iterm_working_directory = dir_bar.prompt;
                 cmd_bar.string.size = 0;
             } else if (in.key.keycode == key_up) {
                 if (tld_iterm_command_history.size == 0) continue;
