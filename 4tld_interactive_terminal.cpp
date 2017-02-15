@@ -201,7 +201,15 @@ CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
                     append_partial_ss(&cmd_bar.string, tld_iterm_command_history.commands[_index]);
                 }
             } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
-                // TODO: Paste from clipboard
+                char *append_pos =   cmd_bar.string.str + cmd_bar.string.size;
+                int32_t append_len = cmd_bar.string.memory_size - cmd_bar.string.size;
+                cmd_bar.string.size += clipboard_index(app, 0, 0, append_pos, append_len);
+                if (cmd_bar.string.size > cmd_bar.string.memory_size) {
+                    // NOTE: This happens sometimes because clipboard_index returns the length
+                    // of the clipboard contents, not the number of bytes written.
+                    
+                    cmd_bar.string.size = cmd_bar.string.memory_size;
+                }
             } else if (in.key.keycode == '\t') {
                 // TODO: Auto complete
             } else if (in.key.keycode == key_back) {
