@@ -200,6 +200,9 @@ CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
                     int32_t _index = (cmd_history_index + tld_iterm_command_history.offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
                     append_partial_ss(&cmd_bar.string, tld_iterm_command_history.commands[_index]);
                 }
+            } else if (in.key.keycode == 'q' && in.key.modifiers[MDFR_ALT]) {
+                exec_command(app, kill_buffer);
+                return;
             } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
                 char *append_pos =   cmd_bar.string.str + cmd_bar.string.size;
                 int32_t append_len = cmd_bar.string.memory_size - cmd_bar.string.size;
