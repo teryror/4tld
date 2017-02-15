@@ -129,7 +129,11 @@ tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Iden
     } else if (match_sc(ident, "home")) {
         tld_iterm_get_home_directory(app, dir);
     } else if (match_sc(ident, "open")) {
-        // TODO: Open the specified file
+        char full_path_space[1024];
+        String full_path = make_fixed_width_string(full_path_space);
+        copy_ss(&full_path, *dir);
+        append_ss(&full_path, make_string(cmd.str, param_len));
+        view_open_file(app, view, expand_str(full_path), false);
     } else {
         exec_system_command(app, view, buffer_id, dir->str, dir->size, expand_str(original_command),
                             CLI_OverlapWithConflict | CLI_CursorAtEnd);
