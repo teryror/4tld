@@ -136,7 +136,6 @@ void tld_project_open_source_files(Application_Links *app, tld_Project *project,
 }
 
 #ifdef TLDPM_IMPLEMENT_COMMANDS
-#undef TLDPM_IMPLEMENT_COMMANDS
 
 static tld_Project tld_current_project = {0};
 static void *__tld_current_project_memory_internal = {0};

@@ -76,6 +76,22 @@ tld_change_directory(String *dir, String rel_path) {
     return success;
 }
 
+#ifdef TLDPM_IMPLEMENT_COMMANDS
+static void
+tld_iterm_get_home_directory(Application_Links *app, String *dest) {
+    if (tld_current_project.working_directory.str) {
+        copy_ss(dest, tld_current_project.working_directory);
+    } else {
+        dest->size = directory_get_hot(app, dest->str, dest->memory_size);
+    }
+}
+#else
+static void
+tld_iterm_get_home_directory(Application_Links *app, String *dest) {
+    dest->size = directory_get_hot(app, dest->str, dest->memory_size);
+}
+#endif
+
 static void
 tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Identifier buffer_id, String cmd, String *dir) {
     String original_command = cmd;
@@ -111,7 +127,7 @@ tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Iden
                                 CLI_OverlapWithConflict | CLI_CursorAtEnd);
         }
     } else if (match_sc(ident, "home")) {
-        // TODO: Return to home directory
+        tld_iterm_get_home_directory(app, dir);
     } else if (match_sc(ident, "open")) {
         // TODO: Open the specified file
     } else {
@@ -132,7 +148,7 @@ CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
     
     char dir_space[1024];
     String dir = make_fixed_width_string(dir_space);
-    dir.size = directory_get_hot(app, dir.str, dir.memory_size);
+    tld_iterm_get_home_directory(app, &dir);
     Query_Bar dir_bar = {0};
     dir_bar.prompt = dir;
     
