@@ -290,6 +290,9 @@ tld_iterm_query_user_command(Application_Links *app,
             } else if (in.key.keycode == 'q' && in.key.modifiers[MDFR_ALT]) {
                 exec_command(app, kill_buffer);
                 return false;
+            } else if (in.key.keycode == 'p' && in.key.modifiers[MDFR_ALT]) {
+                exec_command(app, cmdid_interactive_switch_buffer);
+                return false;
             } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
                 char *append_pos =   cmd_bar->string.str + cmd_bar->string.size;
                 int32_t append_len = cmd_bar->string.memory_size - cmd_bar->string.size;
