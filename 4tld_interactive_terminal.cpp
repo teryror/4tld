@@ -83,10 +83,85 @@ tld_iterm_get_home_directory(Application_Links *app, String *dest) {
 #endif
 
 static void
+tld_iterm_print_file_list(Application_Links *app,
+                          Buffer_Identifier buffer_id,
+                          File_List *file_list)
+{
+    Buffer_Summary buffer = get_buffer(app, buffer_id.id, AccessAll);
+    buffer_replace_range(app, &buffer, 0, buffer.size, literal("\n\nDIRECTORIES:\n"));
+    
+    int32_t line_length = 0;
+    
+    for (int i = 0; i < file_list->count; ++i) {
+        File_Info info = file_list->infos[i];
+        if (info.folder == 0) continue;
+        
+        if (line_length) {
+            if (line_length <= 43 && info.filename_len <= 40) {
+                while (line_length < 45) {
+                    buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal(" "));
+                    ++line_length;
+                }
+                
+                buffer_replace_range(app, &buffer, buffer.size, buffer.size,
+                                     info.filename, info.filename_len);
+                line_length += info.filename_len;
+            } else {
+                buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal("\n"));
+                line_length = 0;
+            }
+        }
+        
+        if (line_length == 0) {
+            buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal("  "));
+            buffer_replace_range(app, &buffer, buffer.size, buffer.size,
+                                 info.filename, info.filename_len);
+            
+            line_length = 2 + info.filename_len;
+        }
+        
+        buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal("/"));
+    }
+    
+    buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal("\n\nFILES:\n"));
+    line_length = 0;
+    
+    for (int i = 0; i < file_list->count; ++i) {
+        File_Info info = file_list->infos[i];
+        if (info.folder) continue;
+        
+        if (line_length) {
+            if (line_length <= 43 && info.filename_len <= 40) {
+                while (line_length < 45) {
+                    buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal(" "));
+                    ++line_length;
+                }
+                
+                buffer_replace_range(app, &buffer, buffer.size, buffer.size,
+                                     info.filename, info.filename_len);
+                line_length += info.filename_len;
+            } else {
+                buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal("\n"));
+                line_length = 0;
+            }
+        }
+        
+        if (line_length == 0) {
+            buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal("  "));
+            buffer_replace_range(app, &buffer, buffer.size, buffer.size,
+                                 info.filename, info.filename_len);
+            
+            line_length = 2 + info.filename_len;
+        }
+    }
+}
+
+static bool
 tld_iterm_handle_command(Application_Links *app,
                          View_Summary *view,
                          Buffer_Identifier buffer_id,
-                         String cmd, String *dir)
+                         String cmd, String *dir,
+                         File_List *file_list)
 {
     String original_command = cmd;
     
@@ -106,34 +181,37 @@ tld_iterm_handle_command(Application_Links *app,
         ++cmd.str;
     }
     
-    // TODO: Clear buffer manually
-    
     int param_len = (int)(cmd_end - cmd.str);
     if (match_sc(ident, "cd")) {
         if (!tld_change_directory(dir, make_string(cmd.str, param_len)))
         {
             tld_show_error("Directory does not exist!");
         } else {
-            // TODO: Do this manually using a file list, which we can use for
-            // better formatting and auto complete
-            exec_system_command(app, view, buffer_id, dir->str, dir->size,
-                                literal("dir /OGN"),
-                                CLI_OverlapWithConflict | CLI_CursorAtEnd);
+            free_file_list(app, *file_list);
+            *file_list = get_file_list(app, expand_str(*dir));
+            tld_iterm_print_file_list(app, buffer_id, file_list);
         }
     } else if (match_sc(ident, "home")) {
         tld_iterm_get_home_directory(app, dir);
+        free_file_list(app, *file_list);
+        *file_list = get_file_list(app, expand_str(*dir));
+        tld_iterm_print_file_list(app, buffer_id, file_list);
     } else if (match_sc(ident, "open")) {
         char full_path_space[1024];
         String full_path = make_fixed_width_string(full_path_space);
         copy_ss(&full_path, *dir);
         append_ss(&full_path, make_string(cmd.str, param_len));
         view_open_file(app, view, expand_str(full_path), false);
+        
+        return true;
     } else {
         exec_system_command(app, view, buffer_id, dir->str, dir->size, expand_str(original_command),
                             CLI_OverlapWithConflict | CLI_CursorAtEnd);
+        Buffer_Summary buffer = get_buffer(app, buffer_id.id, AccessAll);
+        buffer_replace_range(app, &buffer, 0, 0, literal("\n\n"));
     }
     
-    // TODO: Insert whitespace to make text beneath query bars visible
+    return false;
 }
 
 #ifndef TLDIT_COMMAND_HISTORY_CAPACITY
@@ -150,7 +228,8 @@ static bool
 tld_iterm_query_user_command(Application_Links *app,
                              Buffer_Identifier buffer, View_Summary *view,
                              Query_Bar *cmd_bar, Query_Bar *dir_bar,
-                             tld_TerminalCommandHistory *history)
+                             tld_TerminalCommandHistory *history,
+                             File_List *file_list)
 {
     int32_t cmd_history_index = history->size - 1;
     
@@ -184,10 +263,10 @@ tld_iterm_query_user_command(Application_Links *app,
                 }
                 cmd_history_index = history->size - 1;
                 
-                tld_iterm_handle_command(app, view, buffer, cmd_bar->string, &dir_bar->prompt);
+                bool should_exit = tld_iterm_handle_command(app, view, buffer, cmd_bar->string, &dir_bar->prompt, file_list);
                 cmd_bar->string.size = 0;
                 
-                return true;
+                return !should_exit;
             } else if (in.key.keycode == key_up) {
                 if (history->size == 0) continue;
                 
@@ -246,7 +325,8 @@ static void
 tld_iterm_init_session(Application_Links *app,
                        Buffer_Identifier *buffer, View_Summary *view,
                        Query_Bar *cmd_bar, String cmd_space,
-                       Query_Bar *dir_bar)
+                       Query_Bar *dir_bar,
+                       File_List *file_list)
 {
     if (tld_iterm_working_directory.str == 0) {
         tld_iterm_working_directory = make_fixed_width_string(tld_iterm_working_directory_space);
@@ -268,21 +348,27 @@ tld_iterm_init_session(Application_Links *app,
     
     start_query_bar(app, cmd_bar, 0);
     start_query_bar(app, dir_bar, 0);
+    
+    *file_list = get_file_list(app, expand_str(dir_bar->prompt));
+    if (buffer_summary.size == 0) {
+        tld_iterm_print_file_list(app, *buffer, file_list);
+    }
 }
 
 CUSTOM_COMMAND_SIG(tld_terminal_begin_interactive_session) {
     View_Summary view;
     Buffer_Identifier buffer_id;
     Query_Bar cmd_bar, dir_bar;
+    File_List file_list;
     
     char cmd_space[1024];
     String cmd = make_fixed_width_string(cmd_space);
     
-    tld_iterm_init_session(app, &buffer_id, &view, &cmd_bar, cmd, &dir_bar);
+    tld_iterm_init_session(app, &buffer_id, &view, &cmd_bar, cmd, &dir_bar, &file_list);
     
     bool ran_command;
     do {
-        ran_command = tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history);
+        ran_command = tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history, &file_list);
     } while (ran_command);
     
     tld_iterm_working_directory = dir_bar.prompt;
@@ -292,12 +378,13 @@ CUSTOM_COMMAND_SIG(tld_terminal_single_command) {
     View_Summary view;
     Buffer_Identifier buffer_id;
     Query_Bar cmd_bar, dir_bar;
+    File_List file_list;
     
     char cmd_space[1024];
     String cmd = make_fixed_width_string(cmd_space);
     
-    tld_iterm_init_session(app, &buffer_id, &view, &cmd_bar, cmd, &dir_bar);
-    tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history);
+    tld_iterm_init_session(app, &buffer_id, &view, &cmd_bar, cmd, &dir_bar, &file_list);
+    tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history, &file_list);
     tld_iterm_working_directory = dir_bar.prompt;
 }
 
