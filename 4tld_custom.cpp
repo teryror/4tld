@@ -13,6 +13,7 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 #define TLDPM_IMPLEMENT_COMMANDS
 #include "4tld_project_management.cpp"
 
+#define TLDIT_IMPLEMENT_COMMANDS
 #include "4tld_interactive_terminal.cpp"
 
 #define TLD_COLORS_WHITE 0xE0E0E0
@@ -551,47 +552,6 @@ CUSTOM_COMMAND_SIG(git_quick_save) {
     }
 }
 
-CUSTOM_COMMAND_SIG(execute_any_cli_in_default_buffer) {
-    Query_Bar bar_cmd = {0};
-    
-    bar_cmd.prompt = make_lit_string("Command: ");
-    bar_cmd.string = make_fixed_width_string(command_space);
-    if (!query_user_string(app, &bar_cmd)) return;
-    
-    String hot_directory = make_fixed_width_string(hot_directory_space);
-    hot_directory.size = directory_get_hot(app, hot_directory.str, hot_directory.memory_size);
-    
-    View_Summary view;
-    Buffer_Summary buffer;
-    tld_display_buffer_by_name(app, make_lit_string("*terminal*"), &buffer, &view, false, AccessAll);
-    
-    Buffer_Identifier buffer_id = {0};
-    buffer_id.id = buffer.buffer_id;
-    
-    exec_system_command(app, &view, buffer_id, hot_directory.str, hot_directory.size, bar_cmd.string.str, bar_cmd.string.size, CLI_OverlapWithConflict | CLI_CursorAtEnd);
-}
-
-CUSTOM_COMMAND_SIG(execute_last_cli_in_default_buffer) {
-    Query_Bar bar_cmd = {0};
-    
-    bar_cmd.prompt = make_lit_string("Command: ");
-    bar_cmd.string = make_string_slowly(command_space);
-    bar_cmd.string.memory_size = sizeof(command_space);
-    if (!query_user_string(app, &bar_cmd)) return;
-    
-    String hot_directory = make_fixed_width_string(hot_directory_space);
-    hot_directory.size = directory_get_hot(app, hot_directory.str, hot_directory.memory_size);
-    
-    View_Summary view;
-    Buffer_Summary buffer;
-    tld_display_buffer_by_name(app, make_lit_string("*terminal*"), &buffer, &view, false, AccessAll);
-    
-    Buffer_Identifier buffer_id = {0};
-    buffer_id.id = buffer.buffer_id;
-    
-    exec_system_command(app, &view, buffer_id, hot_directory.str, hot_directory.size, bar_cmd.string.str, bar_cmd.string.size, CLI_OverlapWithConflict | CLI_CursorAtEnd);
-}
-
 // NOTE: This is a stub that forces me to use the edit mode
 CUSTOM_COMMAND_SIG(no_op) { }
 
@@ -621,7 +581,7 @@ DefineBimodalKey(binding_name, edit_code, write_character)
 
 DefineModalKey(modal_space, enter_edit_mode);
 
-DefineModalKey(modal_backtick, execute_any_cli_in_default_buffer);
+DefineModalKey(modal_backtick, tld_terminal_single_command);
 DefineModalKey(modal_1, no_op);
 DefineModalKey(modal_2, no_op);
 DefineModalKey(modal_3, no_op);
@@ -635,7 +595,7 @@ DefineModalKey(modal_0, no_op);
 DefineModalKey(modal_dash, no_op);
 DefineModalKey(modal_equals, no_op);
 
-DefineModalKey(modal_tilde, tld_iterm_session_start);
+DefineModalKey(modal_tilde, tld_terminal_begin_interactive_session);
 DefineModalKey(modal_exclamation_mark, no_op);
 DefineModalKey(modal_at, no_op);
 DefineModalKey(modal_pound, no_op);

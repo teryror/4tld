@@ -5,16 +5,6 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 ******************************************************************************/
 #include "4tld_user_interface.h"
 
-#ifndef TLDIT_COMMAND_HISTORY_CAPACITY
-#define TLDIT_COMMAND_HISTORY_CAPACITY 128
-#endif
-
-static struct {
-    String commands[TLDIT_COMMAND_HISTORY_CAPACITY];
-    int32_t size;
-    int32_t offset;
-} tld_iterm_command_history = {0};
-
 // NOTE: This is only needed because directory_cd(6) is broken...
 static bool
 tld_change_directory(String *dir, String rel_path) {
@@ -93,7 +83,11 @@ tld_iterm_get_home_directory(Application_Links *app, String *dest) {
 #endif
 
 static void
-tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Identifier buffer_id, String cmd, String *dir) {
+tld_iterm_handle_command(Application_Links *app,
+                         View_Summary *view,
+                         Buffer_Identifier buffer_id,
+                         String cmd, String *dir)
+{
     String original_command = cmd;
     
     char *cmd_end = cmd.str + cmd.size;
@@ -142,39 +136,28 @@ tld_iterm_handle_command(Application_Links *app, View_Summary *view, Buffer_Iden
     // TODO: Insert whitespace to make text beneath query bars visible
 }
 
-static char tld_iterm_working_directory_space[1024] = {0};
-static String tld_iterm_working_directory = {0};
+#ifndef TLDIT_COMMAND_HISTORY_CAPACITY
+#define TLDIT_COMMAND_HISTORY_CAPACITY 128
+#endif
 
-CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
-    Buffer_Summary buffer;
-    View_Summary view;
-    tld_display_buffer_by_name(app, make_lit_string("*terminal*"),
-                               &buffer, &view, false, AccessAll);
-    Buffer_Identifier buffer_id = {0};
-    buffer_id.id = buffer.buffer_id;
-    
-    if (tld_iterm_working_directory.str == 0) {
-        tld_iterm_working_directory = make_fixed_width_string(tld_iterm_working_directory_space);
-        tld_iterm_get_home_directory(app, &tld_iterm_working_directory);
-    }
-    Query_Bar dir_bar = {0};
-    dir_bar.prompt = tld_iterm_working_directory;
-    
-    char cmd_space[1024];
-    String cmd = make_fixed_width_string(cmd_space);
-    Query_Bar cmd_bar = {0};
-    cmd_bar.prompt = make_lit_string("> ");
-    cmd_bar.string = cmd;
-    
-    start_query_bar(app, &cmd_bar, 0);
-    start_query_bar(app, &dir_bar, 0);
-    
-    int32_t cmd_history_index = tld_iterm_command_history.size - 1;
+struct tld_TerminalCommandHistory {
+    String commands[TLDIT_COMMAND_HISTORY_CAPACITY];
+    int32_t size;
+    int32_t offset;
+};
+
+static bool
+tld_iterm_query_user_command(Application_Links *app,
+                             Buffer_Identifier buffer, View_Summary *view,
+                             Query_Bar *cmd_bar, Query_Bar *dir_bar,
+                             tld_TerminalCommandHistory *history)
+{
+    int32_t cmd_history_index = history->size - 1;
     
     while (true) {
         User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
         
-        if (in.abort) return;
+        if (in.abort) return false;
         
         bool good_character = false;
         if (key_is_unmodified(&in.key) && in.key.character != 0) {
@@ -183,72 +166,139 @@ CUSTOM_COMMAND_SIG(tld_iterm_session_start) {
         
         if (in.type == UserInputKey) {
             if (in.key.keycode == '\n') {
-                int32_t offset = (tld_iterm_command_history.size + tld_iterm_command_history.offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
+                int32_t offset = (history->size + history->offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
                 
-                if (tld_iterm_command_history.commands[offset].str)
-                    free(tld_iterm_command_history.commands[offset].str);
+                if (history->commands[offset].str)
+                    free(history->commands[offset].str);
                 
-                tld_iterm_command_history.commands[offset] = {0};
-                tld_iterm_command_history.commands[offset].str = (char*)malloc(cmd_bar.string.size);
-                tld_iterm_command_history.commands[offset].memory_size = cmd_bar.string.size;
-                copy_partial_ss(&tld_iterm_command_history.commands[offset], cmd_bar.string);
+                history->commands[offset] = {0};
+                history->commands[offset].str = (char*)malloc(cmd_bar->string.size);
+                history->commands[offset].memory_size = cmd_bar->string.size;
+                copy_partial_ss(&history->commands[offset], cmd_bar->string);
                 
-                if (tld_iterm_command_history.size < TLDIT_COMMAND_HISTORY_CAPACITY) {
-                    ++tld_iterm_command_history.size;
+                if (history->size < TLDIT_COMMAND_HISTORY_CAPACITY) {
+                    ++history->size;
                 } else {
-                    tld_iterm_command_history.offset += 1;
-                    tld_iterm_command_history.offset %= TLDIT_COMMAND_HISTORY_CAPACITY;
+                    history->offset += 1;
+                    history->offset %= TLDIT_COMMAND_HISTORY_CAPACITY;
                 }
-                cmd_history_index = tld_iterm_command_history.size - 1;
+                cmd_history_index = history->size - 1;
                 
-                tld_iterm_handle_command(app, &view, buffer_id,
-                                         cmd_bar.string, &dir_bar.prompt);
-                tld_iterm_working_directory = dir_bar.prompt;
-                cmd_bar.string.size = 0;
+                tld_iterm_handle_command(app, view, buffer, cmd_bar->string, &dir_bar->prompt);
+                cmd_bar->string.size = 0;
+                
+                return true;
             } else if (in.key.keycode == key_up) {
-                if (tld_iterm_command_history.size == 0) continue;
+                if (history->size == 0) continue;
                 
-                int32_t _index = (cmd_history_index + tld_iterm_command_history.offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
-                cmd_bar.string.size = 0;
-                append_partial_ss(&cmd_bar.string, tld_iterm_command_history.commands[_index]);
+                int32_t _index = (cmd_history_index + history->offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
+                cmd_bar->string.size = 0;
+                append_partial_ss(&cmd_bar->string, history->commands[_index]);
                 
                 if (cmd_history_index > 0)
                     --cmd_history_index;
                 
             } else if (in.key.keycode == key_down) {
-                if (tld_iterm_command_history.size == 0) continue;
+                if (history->size == 0) continue;
                 
-                cmd_bar.string.size = 0;
-                if (cmd_history_index + 1 < tld_iterm_command_history.size) {
+                cmd_bar->string.size = 0;
+                if (cmd_history_index + 1 < history->size) {
                     ++cmd_history_index;
                     
-                    int32_t _index = (cmd_history_index + tld_iterm_command_history.offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
-                    append_partial_ss(&cmd_bar.string, tld_iterm_command_history.commands[_index]);
+                    int32_t _index = (cmd_history_index + history->offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
+                    append_partial_ss(&cmd_bar->string, history->commands[_index]);
                 }
             } else if (in.key.keycode == 'q' && in.key.modifiers[MDFR_ALT]) {
                 exec_command(app, kill_buffer);
-                return;
+                return false;
             } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
-                char *append_pos =   cmd_bar.string.str + cmd_bar.string.size;
-                int32_t append_len = cmd_bar.string.memory_size - cmd_bar.string.size;
-                cmd_bar.string.size += clipboard_index(app, 0, 0, append_pos, append_len);
-                if (cmd_bar.string.size > cmd_bar.string.memory_size) {
+                char *append_pos =   cmd_bar->string.str + cmd_bar->string.size;
+                int32_t append_len = cmd_bar->string.memory_size - cmd_bar->string.size;
+                cmd_bar->string.size += clipboard_index(app, 0, 0, append_pos, append_len);
+                if (cmd_bar->string.size > cmd_bar->string.memory_size) {
                     // NOTE: This happens sometimes because clipboard_index returns the length
                     // of the clipboard contents, not the number of bytes written.
                     
-                    cmd_bar.string.size = cmd_bar.string.memory_size;
+                    cmd_bar->string.size = cmd_bar->string.memory_size;
                 }
             } else if (in.key.keycode == '\t') {
                 // TODO: Auto complete
             } else if (in.key.keycode == key_back) {
-                if (cmd_bar.string.size > 0) {
-                    --cmd_bar.string.size;
+                if (cmd_bar->string.size > 0) {
+                    --cmd_bar->string.size;
                 }
             } else if (in.key.keycode == key_del) {
-                cmd_bar.string.size = 0;
+                cmd_bar->string.size = 0;
             } else if (good_character) {
-                append_s_char(&cmd_bar.string, in.key.character);
+                append_s_char(&cmd_bar->string, in.key.character);
             }
         }
     }
 }
+
+#ifdef TLDIT_IMPLEMENT_COMMANDS
+
+static tld_TerminalCommandHistory tld_iterm_command_history = {0};
+static char tld_iterm_working_directory_space[1024] = {0};
+static String tld_iterm_working_directory = {0};
+
+static void
+tld_iterm_init_session(Application_Links *app,
+                       Buffer_Identifier *buffer, View_Summary *view,
+                       Query_Bar *cmd_bar, String cmd_space,
+                       Query_Bar *dir_bar)
+{
+    if (tld_iterm_working_directory.str == 0) {
+        tld_iterm_working_directory = make_fixed_width_string(tld_iterm_working_directory_space);
+        tld_iterm_get_home_directory(app, &tld_iterm_working_directory);
+    }
+    
+    Buffer_Summary buffer_summary;
+    tld_display_buffer_by_name(app, make_lit_string("*terminal*"),
+                               &buffer_summary, view, false, AccessAll);
+    *buffer = {0};
+    buffer->id = buffer_summary.buffer_id;
+    
+    *cmd_bar = {0};
+    cmd_bar->prompt = make_lit_string("> ");
+    cmd_bar->string = cmd_space;
+    
+    *dir_bar = {0};
+    dir_bar->prompt = tld_iterm_working_directory;
+    
+    start_query_bar(app, cmd_bar, 0);
+    start_query_bar(app, dir_bar, 0);
+}
+
+CUSTOM_COMMAND_SIG(tld_terminal_begin_interactive_session) {
+    View_Summary view;
+    Buffer_Identifier buffer_id;
+    Query_Bar cmd_bar, dir_bar;
+    
+    char cmd_space[1024];
+    String cmd = make_fixed_width_string(cmd_space);
+    
+    tld_iterm_init_session(app, &buffer_id, &view, &cmd_bar, cmd, &dir_bar);
+    
+    bool ran_command;
+    do {
+        ran_command = tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history);
+    } while (ran_command);
+    
+    tld_iterm_working_directory = dir_bar.prompt;
+}
+
+CUSTOM_COMMAND_SIG(tld_terminal_single_command) {
+    View_Summary view;
+    Buffer_Identifier buffer_id;
+    Query_Bar cmd_bar, dir_bar;
+    
+    char cmd_space[1024];
+    String cmd = make_fixed_width_string(cmd_space);
+    
+    tld_iterm_init_session(app, &buffer_id, &view, &cmd_bar, cmd, &dir_bar);
+    tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history);
+    tld_iterm_working_directory = dir_bar.prompt;
+}
+
+#endif
