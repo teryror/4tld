@@ -17,8 +17,14 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   `tld_project_load_from_buffer(3)` to get a `tld_Project`.
   If you wish to use the predefined commands, you need to first `#define
   TLDPM_IMPLEMENT_COMMANDS`, and call `tld_project_memory_init()` on startup.
-* **4tld\_interactive\_terminal.cpp** contains a fairly basic interactive terminal.
-  This is Work-In-Progress.
+* **4tld\_interactive\_terminal.cpp** contains a basic interactive terminal,
+  including command history tracking and auto-completion of file names.
+  `#define TLDIT_IMPLEMENT_COMMANDS` before including it to get the default
+  commands (the actual terminal emulation, and a one-command variation).
+  You can of course call the other commands, but this involves a fair amount of
+  setup -- see the actual implementation of the default commands for reference.
+  If you first include 4tld\_project\_management.cpp with the default commands,
+  the project's working directory is used as the home directory for the terminal.
 * **4tld\_user\_interface.h** is intended for utility functions pertaining to
   view management, scroll rules, query bars and other miscellaneous UI features.
   Note that both 4tld\_custom.cpp and 4tld\_find\_and\_replace.cpp depend on it.
@@ -37,9 +43,10 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   I would love to bring that back in a more robust fashion.
 * The existing `git_quick_save` command is pretty useful, and I would like to do
   more to make version control invisible.
-* I might experiment with the frame rendering hooks and scroll rules to add an
-  animated cursor, and keep it closer to the (vertical) center of the screen,
-  respectively.
+* While implementing the terminal I came up with some other cool ways to interact
+  with the file system: Fuzzy file opening (and a matching switch buffer command)
+  similar to sublime, and a directory editor, similar to dired mode in emacs.
+  Both of these would get integrated into the terminal to some degree.
 * Finally, I've been putting off a clean-up pass since about version 4.0.5, when
   I wrote the original version of these customizations. I really need to clean up
   the way I handle panels, and should make sure behaviour between commands is more
