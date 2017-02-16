@@ -238,6 +238,46 @@ tld_iterm_query_user_command(Application_Links *app,
         
         if (in.abort) return false;
         
+        if (in.type == UserInputKey && in.key.keycode == '\t') {
+            if (cmd_bar->string.size == 0) continue;
+            
+            Range incomplete_string = {0};
+            incomplete_string.max = cmd_bar->string.size;
+            incomplete_string.min = incomplete_string.max - 1;
+            while (incomplete_string.min > 0 &&
+                   cmd_bar->string.str[incomplete_string.min] != ' ' &&
+                   cmd_bar->string.str[incomplete_string.min] != '\t')
+            {
+                --incomplete_string.min;
+            }
+            if (incomplete_string.min > 0) {
+                ++incomplete_string.min;
+            }
+            
+            String prefix = cmd_bar->string;
+            prefix.str += incomplete_string.min;
+            prefix.size = incomplete_string.max - incomplete_string.min;
+            if (prefix.size == 0) continue;
+            
+            int32_t file_index = -1;
+            while (in.type == UserInputKey && in.key.keycode == '\t') {
+                for (++file_index; file_index < file_list->count; ++file_index) {
+                    if (match_part_cs(file_list->infos[file_index].filename, prefix)) {
+                        break;
+                    }
+                }
+                
+                cmd_bar->string.size = incomplete_string.max;
+                if (file_index < file_list->count) {
+                    append_ss(&cmd_bar->string, make_string(file_list->infos[file_index].filename + prefix.size, file_list->infos[file_index].filename_len - prefix.size));
+                } else {
+                    file_index = -1;
+                }
+                
+                in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
+            }
+        }
+        
         bool good_character = false;
         if (key_is_unmodified(&in.key) && in.key.character != 0) {
             good_character = true;
@@ -303,8 +343,6 @@ tld_iterm_query_user_command(Application_Links *app,
                     
                     cmd_bar->string.size = cmd_bar->string.memory_size;
                 }
-            } else if (in.key.keycode == '\t') {
-                // TODO: Auto complete
             } else if (in.key.keycode == key_back) {
                 if (cmd_bar->string.size > 0) {
                     --cmd_bar->string.size;
