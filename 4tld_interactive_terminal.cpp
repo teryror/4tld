@@ -201,9 +201,12 @@ tld_iterm_handle_command(Application_Links *app,
         String full_path = make_fixed_width_string(full_path_space);
         copy_ss(&full_path, *dir);
         append_ss(&full_path, make_string(cmd.str, param_len));
-        view_open_file(app, view, expand_str(full_path), false);
-        
-        return true;
+        if (file_exists(app, expand_str(full_path))) {
+            view_open_file(app, view, expand_str(full_path), false);
+            return true;
+        } else {
+            tld_show_error("File does not exist!");
+        }
     } else {
         exec_system_command(app, view, buffer_id, dir->str, dir->size, expand_str(original_command),
                             CLI_OverlapWithConflict | CLI_CursorAtEnd);
