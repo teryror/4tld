@@ -812,8 +812,8 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, key_f2, MDFR_NONE, list_all_functions_current_buffer);
     bind(context, key_f5, MDFR_NONE, git_quick_save);
     // TODO: bind(context, key_f5, MDFR_SHIFT, git_add_current_file);
-    bind(context, key_f7, MDFR_NONE, tld_current_project_build);
-    bind(context, key_f7, MDFR_SHIFT, tld_current_project_change_build_config);
+    bind(context, key_f7, MDFR_NONE, tld_current_project_save_and_build);
+    bind(context, key_f7, MDFR_SHIFT, tld_current_project_save_and_change_build_config);
     bind(context, key_f11, MDFR_NONE, maximize_panel);
     
     // TODO: Unused key bindings

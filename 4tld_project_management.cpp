@@ -171,6 +171,11 @@ CUSTOM_COMMAND_SIG(tld_current_project_build) {
                         CLI_OverlapWithConflict | CLI_CursorAtEnd);
 }
 
+CUSTOM_COMMAND_SIG(tld_current_project_save_and_build) {
+    save_all_dirty_buffers(app);
+    exec_command(app, tld_current_project_build);
+}
+
 CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
     if (!tld_current_project.build_configurations_count) return;
     
@@ -212,6 +217,11 @@ CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
             return;
         }
     }
+}
+
+CUSTOM_COMMAND_SIG(tld_current_project_save_and_change_build_config) {
+    save_all_dirty_buffers(app);
+    exec_command(app, tld_current_project_change_build_config);
 }
 
 #endif
