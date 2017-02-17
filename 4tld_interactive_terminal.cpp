@@ -159,6 +159,9 @@ tld_iterm_handle_command(Application_Links *app,
         } else {
             tld_show_error("File does not exist!");
         }
+    } else if (match_sc(ident, "quit")) {
+        exec_command(app, exit_4coder);
+        return true;
     } else {
         exec_system_command(app, view, buffer_id, dir->str, dir->size, expand_str(original_command),
                             CLI_OverlapWithConflict | CLI_CursorAtEnd);

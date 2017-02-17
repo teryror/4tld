@@ -802,11 +802,10 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, 'O', MDFR_ALT, open_all_code);
     bind(context, 'p', MDFR_ALT, cmdid_interactive_switch_buffer);
     bind(context, 'q', MDFR_ALT, cmdid_kill_buffer);
-    // NOTE: Since alpha-4-0-15, 4coder doesn't seem to close on Alt-F4 properly
-    bind(context, 'Q', MDFR_ALT, exit_4coder);
     bind(context, 'r', MDFR_ALT, replace_range);
     bind(context, 's', MDFR_ALT, smart_save);
     bind(context, 'v', MDFR_ALT, paste);
+    bind(context, 'w', MDFR_ALT, close_panel);
     bind(context, 'x', MDFR_ALT, cut);
     bind(context, 'y', MDFR_ALT, cmdid_redo);
     bind(context, 'z', MDFR_ALT, cmdid_undo);
