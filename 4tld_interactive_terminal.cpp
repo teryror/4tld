@@ -280,10 +280,7 @@ tld_iterm_query_user_command(Application_Links *app,
                 }
                 cmd_history_index = history->size - 1;
                 
-                bool should_exit = tld_iterm_handle_command(app, view, buffer, cmd_bar->string, &dir_bar->prompt, file_list);
-                cmd_bar->string.size = 0;
-                
-                return !should_exit;
+                return true;
             } else if (in.key.keycode == key_up) {
                 if (history->size == 0) continue;
                 
@@ -384,10 +381,15 @@ CUSTOM_COMMAND_SIG(tld_terminal_begin_interactive_session) {
     
     tld_iterm_init_session(app, &buffer_id, &view, &cmd_bar, cmd, &dir_bar, &file_list);
     
-    bool ran_command;
+    bool should_exit;
     do {
-        ran_command = tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history, &file_list);
-    } while (ran_command);
+        if (tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history, &file_list)) {
+            should_exit = tld_iterm_handle_command(app, &view, buffer_id, cmd_bar.string, &dir_bar.prompt, &file_list);
+        } else {
+            should_exit = true;
+        }
+        cmd_bar.string.size = 0;
+    } while (!should_exit);
     
     tld_iterm_working_directory = dir_bar.prompt;
 }
@@ -402,7 +404,9 @@ CUSTOM_COMMAND_SIG(tld_terminal_single_command) {
     String cmd = make_fixed_width_string(cmd_space);
     
     tld_iterm_init_session(app, &buffer_id, &view, &cmd_bar, cmd, &dir_bar, &file_list);
-    tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history, &file_list);
+    if (tld_iterm_query_user_command(app, buffer_id, &view, &cmd_bar, &dir_bar, &tld_iterm_command_history, &file_list)) {
+        tld_iterm_handle_command(app, &view, buffer_id, cmd_bar.string, &dir_bar.prompt, &file_list);
+    }
     tld_iterm_working_directory = dir_bar.prompt;
 }
 
