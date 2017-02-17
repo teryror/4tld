@@ -123,6 +123,69 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
     view_set_buffer(app, view, buffer->buffer_id, 0);
 }
 
+static void
+tld_query_complete_filenames(Application_Links *app, User_Input *in, char keycode, String *bar_string, File_List *file_list, String work_dir)
+{
+    if (in->type == UserInputKey && in->key.keycode == keycode) {
+        Range incomplete_string = {0};
+        incomplete_string.max = bar_string->size;
+        incomplete_string.min = incomplete_string.max - 1;
+        bool in_work_dir = true;
+        
+        while (incomplete_string.min >= 0 &&
+               bar_string->str[incomplete_string.min] != ' ' &&
+               bar_string->str[incomplete_string.min] != '\t')
+        {
+            if (bar_string->str[incomplete_string.min] == '/' ||
+                bar_string->str[incomplete_string.min] == '\\')
+            {
+                in_work_dir = false;
+            }
+            --incomplete_string.min;
+        }
+        ++incomplete_string.min;
+        
+        String prefix = *bar_string;
+        prefix.str += incomplete_string.min;
+        prefix.size = incomplete_string.max - incomplete_string.min;
+        
+        File_List files;
+        if (in_work_dir) {
+            files = *file_list;
+        } else {
+            char other_dir_space[1024];
+            String other_dir = make_fixed_width_string(other_dir_space);
+            append_ss(&other_dir, work_dir);
+            tld_change_directory(&other_dir, path_of_directory(prefix));
+            prefix = front_of_directory(prefix);
+            
+            files = get_file_list(app, expand_str(other_dir));
+        }
+        
+        int32_t file_index = -1;
+        while (in->type == UserInputKey && in->key.keycode == keycode) {
+            for (++file_index; file_index < files.count; ++file_index) {
+                if (match_part_insensitive_cs(files.infos[file_index].filename, prefix)) {
+                    break;
+                }
+            }
+            
+            bar_string->size = incomplete_string.max;
+            if (file_index < files.count) {
+                append_ss(bar_string, make_string(files.infos[file_index].filename + prefix.size, files.infos[file_index].filename_len - prefix.size));
+            } else {
+                file_index = -1;
+            }
+            
+            *in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
+        }
+        
+        if (!in_work_dir) {
+            free_file_list(app, files);
+        }
+    }
+}
+
 // Allow the user to reenter a string into an already open query bar.
 // Note that start_query_bar has to be called before this function.
 static int32_t
