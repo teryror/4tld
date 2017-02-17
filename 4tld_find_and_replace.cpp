@@ -15,13 +15,6 @@ sharing this code:
   tld_requery_user_string does not allow entering them. We can already copy
   them with interactive_find_and_replace_selection, but the query_bar doesn't
   render them right anyway. Having a (visible!) cursor would also be great.
-- When there's a match in the first couple lines of a buffer, it is obscured by
-  the query bars. We could mitigate this by hiding them when not actually
-  querying a string, but I would prefer if the view would scroll above the
-  beginning of the buffer to accomodate us.
-  -> This might be possible to do with scroll rules, have not looked into that
-     yet. Requiring use of a special scroll rule also isn't a very good option
-     when sharing this with others, though.
 - We're potentially leaving optimizations on the table by not utilizing the
   existing functionality in 4coder_search.cpp -- this isn't documented very
   well, and it seems to be working fine as is, but I should look into that
@@ -44,7 +37,11 @@ tld_interactive_find_and_replace(Application_Links *app,
                                  View_Summary *view,
                                  bool show_hints)
 {
+    int32_t query_bar_count = 3;
+    
     if (show_hints) {
+        query_bar_count += 2;
+        
         Query_Bar hints2;
         hints2.prompt = make_lit_string("F: Find previous -- R: Replace all -- A: search All buffers");
         hints2.string = make_lit_string("");
@@ -62,12 +59,18 @@ tld_interactive_find_and_replace(Application_Links *app,
     find_bar->prompt = make_lit_string("[M-f] Find what: ");
     start_query_bar(app, find_bar, 0);
     
+    Buffer_Summary buffer = get_buffer(app, view->buffer_id, AccessAll);
+    if (!buffer.exists) return;
+    
+    // TODO(On Update): This is done to make the text in the first couple lines visible
+    // If something to this effect ever makes it into default 4coder, remove this hack!
+    for (int i = 0; i < query_bar_count; ++i) {
+        buffer_replace_range(app, &buffer, 0, 0, literal("\n"));
+    }
+    
     if (find_bar->string.size == 0) {
         tld_requery_user_string(app, find_bar);
     }
-    
-    Buffer_Summary buffer = get_buffer(app, view->buffer_id, AccessAll);
-    if (!buffer.exists) return;
     
     Range match = make_range(0, 0);
     
@@ -99,13 +102,13 @@ tld_interactive_find_and_replace(Application_Links *app,
                     if (match.max - match.min > 0) {
                         pos = match.max + 1;
                         if (pos >= buffer.size) {
-                            pos = 0;
+                            pos = query_bar_count;
                         }
                     }
                     
                     buffer_seek_string_forward(app, &buffer, pos, 0, find_bar->string.str, find_bar->string.size, &new_pos);
                     if (new_pos >= buffer.size) {
-                        buffer_seek_string_forward(app, &buffer, 0, 0, find_bar->string.str, find_bar->string.size, &new_pos);
+                        buffer_seek_string_forward(app, &buffer, query_bar_count, 0, find_bar->string.str, find_bar->string.size, &new_pos);
                         
                         if (new_pos >= buffer.size) {
                             match.min = 0;
@@ -122,15 +125,15 @@ tld_interactive_find_and_replace(Application_Links *app,
                 search_backwards = true;
                 if (match.max - match.min > 0) {
                     pos = match.min - 1;
-                    if (pos < 0) {
+                    if (pos < query_bar_count) {
                         pos = buffer.size;
                     }
                 }
                 
-                buffer_seek_string_backward(app, &buffer, pos, 0, find_bar->string.str, find_bar->string.size, &new_pos);
-                if (new_pos < 0) {
-                    buffer_seek_string_backward(app, &buffer, buffer.size - find_bar->string.size, 0, find_bar->string.str, find_bar->string.size, &new_pos);
-                    if (new_pos < 0) {
+                buffer_seek_string_backward(app, &buffer, pos, query_bar_count, find_bar->string.str, find_bar->string.size, &new_pos);
+                if (new_pos < query_bar_count) {
+                    buffer_seek_string_backward(app, &buffer, buffer.size - find_bar->string.size, query_bar_count, find_bar->string.str, find_bar->string.size, &new_pos);
+                    if (new_pos < query_bar_count) {
                         match.min = 0;
                         match.max = 0;
                         break;
@@ -165,7 +168,7 @@ tld_interactive_find_and_replace(Application_Links *app,
                     continue;
                 }
                 
-                new_pos = 0;
+                new_pos = query_bar_count;
                 while (new_pos < buffer.size) {
                     buffer_seek_string_forward(app, &buffer, new_pos, 0, find_bar->string.str, find_bar->string.size, &new_pos);
                     if (new_pos < buffer.size) {
@@ -198,6 +201,8 @@ tld_interactive_find_and_replace(Application_Links *app,
             view_set_mark(app, view, seek_pos(match.min));
             view_set_cursor(app, view, seek_pos(match.max), false);
         }
+        
+        buffer_replace_range(app, &buffer, 0, query_bar_count, literal(""));
     }
 }
 
