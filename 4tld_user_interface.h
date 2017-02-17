@@ -123,6 +123,77 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
     view_set_buffer(app, view, buffer->buffer_id, 0);
 }
 
+// 
+// REGION(Query_Bars)
+// 
+
+struct tld_StringHistory {
+    String* strings;
+    int32_t size;
+    int32_t offset;
+    int32_t capacity;
+};
+
+// Pushes a new string into the history and deletes the oldest one if necessary.
+// 
+// NOTE: This does ALL the memory management, so do not copy string pointers out of
+// the history unless you are certain you're not pushing anything else during the
+// copy's lifetime.
+static void
+tld_string_history_push(tld_StringHistory *history, String value) {
+    int32_t offset = (history->size + history->offset) % history->capacity;
+    
+    if (history->strings[offset].str) {
+        free(history->strings[offset].str);
+    }
+    
+    history->strings[offset] = {0};
+    history->strings[offset].str = (char *) malloc(value.size);
+    history->strings[offset].memory_size = value.size;
+    copy_partial_ss(&history->strings[offset], value);
+    
+    if (history->size < history->capacity) {
+        ++history->size;
+    } else {
+        history->offset += 1;
+        history->offset %= history->capacity;
+    }
+}
+
+// Replaces the text in the string with a string from the history.
+// This is for use inside a query_user_string type function, NOT a full implementation itself.
+static void
+tld_query_traverse_history(User_Input in,
+                           char keycode_older,
+                           char keycode_newer,
+                           String *bar_string,
+                           tld_StringHistory *history,
+                           int32_t *history_index)
+{
+    if (history->size <= 0) return;
+    
+    if (in.type == UserInputKey) {
+        if (in.key.keycode == keycode_older) {
+            int32_t _index = (*history_index + history->offset) % history->capacity;
+            bar_string->size = 0;
+            append_partial_ss(bar_string, history->strings[_index]);
+            
+            if (*history_index > 0)
+                *history_index -= 1;
+        } else if (in.key.keycode == keycode_newer) {
+            bar_string->size = 0;
+            if (*history_index + 1 < history->size) {
+                *history_index += 1;
+                
+                int32_t _index = (*history_index + history->offset) % history->capacity;
+                append_partial_ss(bar_string, history->strings[_index]);
+            }
+        }
+    }
+}
+
+// Autocompletes filenames of files in the specified work_dir and its subdirectories.
+// This is for use inside a query_user_string type function, NOT a full implementation itself.
 static void
 tld_query_complete_filenames(Application_Links *app, User_Input *in, char keycode, String *bar_string, File_List *file_list, String work_dir)
 {

@@ -172,21 +172,11 @@ tld_iterm_handle_command(Application_Links *app,
     return false;
 }
 
-#ifndef TLDIT_COMMAND_HISTORY_CAPACITY
-#define TLDIT_COMMAND_HISTORY_CAPACITY 128
-#endif
-
-struct tld_TerminalCommandHistory {
-    String commands[TLDIT_COMMAND_HISTORY_CAPACITY];
-    int32_t size;
-    int32_t offset;
-};
-
 static bool
 tld_iterm_query_user_command(Application_Links *app,
                              Buffer_Identifier buffer, View_Summary *view,
                              Query_Bar *cmd_bar, Query_Bar *dir_bar,
-                             tld_TerminalCommandHistory *history,
+                             tld_StringHistory *history,
                              File_List *file_list)
 {
     int32_t cmd_history_index = history->size - 1;
@@ -197,6 +187,7 @@ tld_iterm_query_user_command(Application_Links *app,
         if (in.abort) return false;
         
         tld_query_complete_filenames(app, &in, '\t', &cmd_bar->string, file_list, dir_bar->string);
+        tld_query_traverse_history(in, key_up, key_down, &cmd_bar->string, history, &cmd_history_index);
         
         bool good_character = false;
         if (key_is_unmodified(&in.key) && in.key.character != 0) {
@@ -205,45 +196,9 @@ tld_iterm_query_user_command(Application_Links *app,
         
         if (in.type == UserInputKey) {
             if (in.key.keycode == '\n') {
-                int32_t offset = (history->size + history->offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
-                
-                if (history->commands[offset].str)
-                    free(history->commands[offset].str);
-                
-                history->commands[offset] = {0};
-                history->commands[offset].str = (char*)malloc(cmd_bar->string.size);
-                history->commands[offset].memory_size = cmd_bar->string.size;
-                copy_partial_ss(&history->commands[offset], cmd_bar->string);
-                
-                if (history->size < TLDIT_COMMAND_HISTORY_CAPACITY) {
-                    ++history->size;
-                } else {
-                    history->offset += 1;
-                    history->offset %= TLDIT_COMMAND_HISTORY_CAPACITY;
-                }
+                tld_string_history_push(history, cmd_bar->string);
                 cmd_history_index = history->size - 1;
-                
                 return true;
-            } else if (in.key.keycode == key_up) {
-                if (history->size == 0) continue;
-                
-                int32_t _index = (cmd_history_index + history->offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
-                cmd_bar->string.size = 0;
-                append_partial_ss(&cmd_bar->string, history->commands[_index]);
-                
-                if (cmd_history_index > 0)
-                    --cmd_history_index;
-                
-            } else if (in.key.keycode == key_down) {
-                if (history->size == 0) continue;
-                
-                cmd_bar->string.size = 0;
-                if (cmd_history_index + 1 < history->size) {
-                    ++cmd_history_index;
-                    
-                    int32_t _index = (cmd_history_index + history->offset) % TLDIT_COMMAND_HISTORY_CAPACITY;
-                    append_partial_ss(&cmd_bar->string, history->commands[_index]);
-                }
             } else if (in.key.keycode == 'q' && in.key.modifiers[MDFR_ALT]) {
                 exec_command(app, kill_buffer);
                 return false;
@@ -275,7 +230,12 @@ tld_iterm_query_user_command(Application_Links *app,
 
 #ifdef TLDIT_IMPLEMENT_COMMANDS
 
-static tld_TerminalCommandHistory tld_iterm_command_history = {0};
+#ifndef TLDIT_COMMAND_HISTORY_CAPACITY
+#define TLDIT_COMMAND_HISTORY_CAPACITY 128
+#endif
+
+static String tld_iterm_command_history_space[TLDIT_COMMAND_HISTORY_CAPACITY];
+static tld_StringHistory tld_iterm_command_history = {0};
 static char tld_iterm_working_directory_space[1024] = {0};
 static String tld_iterm_working_directory = {0};
 
@@ -286,6 +246,11 @@ tld_iterm_init_session(Application_Links *app,
                        Query_Bar *dir_bar,
                        File_List *file_list)
 {
+    if (tld_iterm_command_history.strings == 0) {
+        tld_iterm_command_history.strings = tld_iterm_command_history_space;
+        tld_iterm_command_history.capacity = TLDIT_COMMAND_HISTORY_CAPACITY;
+    }
+    
     if (tld_iterm_working_directory.str == 0) {
         tld_iterm_working_directory = make_fixed_width_string(tld_iterm_working_directory_space);
         tld_iterm_get_home_directory(app, &tld_iterm_working_directory);
