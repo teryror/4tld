@@ -27,7 +27,7 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   the project's working directory is used as the home directory for the terminal.
 * **4tld\_user\_interface.h** is intended for utility functions pertaining to
   view management, scroll rules, query bars and other miscellaneous UI features.
-  Note that both 4tld\_custom.cpp and 4tld\_find\_and\_replace.cpp depend on it.
+  Note that all the drop-in command packs depend on this file.
 * **build.bat** builds 4tld_custom.cpp using `pushd` and `popd`, so that
   this repository can be cloned into the directory containing 4ed.exe,
   buildsuper.bat, etc.
