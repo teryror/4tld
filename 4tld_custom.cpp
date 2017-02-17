@@ -410,6 +410,8 @@ CUSTOM_COMMAND_SIG(write_or_goto_position){
     }
 }
 
+/*
+
 // NOTE: Hackish workaround for the lack of the new_file_hook
 // TODO: Is this fixed in 4-0-16?
 static bool opened_file_is_new = false;
@@ -422,14 +424,14 @@ CUSTOM_COMMAND_SIG(open_file) {
     exec_command(app, cmdid_interactive_open);
 }
 
+*/
+
 // TODO: This is pretty nice, but there are some minor improvements we could make:
 // * Locate a corresponding file without allocating memory
 // * Look for different build files depending on the platform
 // * Provide multiple file names to the recursive search,
 //   so that the README and TODO options become more powerful.
 CUSTOM_COMMAND_SIG(interactive_find_file) {
-    opened_file_is_new = false;
-    
     Query_Bar hints;
     hints.prompt = make_lit_string("b: Build File -- c: Corresponding Code File -- r: README -- t: TODO -- Space: Other");
     hints.string = make_lit_string("");
@@ -721,60 +723,65 @@ HOOK_SIG(global_settings) {
     return 0;
 }
 
-OPEN_FILE_HOOK_SIG(file_settings) {
-    Buffer_Summary buffer = get_buffer(app, buffer_id, AccessProtected | AccessHidden);
-    
-    bool insert_header_comment = false;
-    
-    if (buffer.file_name && buffer.size < (16 << 20)) {
-        String ext = file_extension(make_string(buffer.file_name, buffer.file_name_len));
+static void
+get_file_settings(Application_Links *app, Buffer_Summary *buffer) {
+    if (buffer->file_name && buffer->size < (16 << 20)) {
+        String ext = file_extension(make_string(buffer->file_name, buffer->file_name_len));
         if (match_ss(ext, make_lit_string("cpp")) ||
             match_ss(ext, make_lit_string("hpp")) ||
             match_ss(ext, make_lit_string("c")) ||
             match_ss(ext, make_lit_string("h")))
         {
-            insert_header_comment = opened_file_is_new;
+            buffer_set_setting(app, buffer, BufferSetting_Lex, true);
             
-            buffer_set_setting(app, &buffer, BufferSetting_Lex, true);
+            buffer_set_setting(app, buffer, BufferSetting_WrapPosition, 900);
+            buffer_set_setting(app, buffer, BufferSetting_MinimumBaseWrapPosition, 480);
             
-            buffer_set_setting(app, &buffer, BufferSetting_WrapPosition, 900);
-            buffer_set_setting(app, &buffer, BufferSetting_MinimumBaseWrapPosition, 480);
-            
-            buffer_set_setting(app, &buffer, BufferSetting_WrapLine, true);
-            buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, true);
+            buffer_set_setting(app, buffer, BufferSetting_WrapLine, true);
+            buffer_set_setting(app, buffer, BufferSetting_VirtualWhitespace, true);
         } else if (match_ss(ext, make_lit_string("rs")) ||
                    match_ss(ext, make_lit_string("java")) ||
                    match_ss(ext, make_lit_string("cs"))) {
-            insert_header_comment = opened_file_is_new;
+            buffer_set_setting(app, buffer, BufferSetting_Lex, true);
             
-            buffer_set_setting(app, &buffer, BufferSetting_Lex, true);
-            
-            buffer_set_setting(app, &buffer, BufferSetting_WrapLine, false);
-            buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
+            buffer_set_setting(app, buffer, BufferSetting_WrapLine, false);
+            buffer_set_setting(app, buffer, BufferSetting_VirtualWhitespace, false);
         } else if (match_ss(ext, make_lit_string("xml"))) {
-            buffer_set_setting(app, &buffer, BufferSetting_Lex, false);
+            buffer_set_setting(app, buffer, BufferSetting_Lex, false);
             
-            buffer_set_setting(app, &buffer, BufferSetting_WrapLine, false);
-            buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
+            buffer_set_setting(app, buffer, BufferSetting_WrapLine, false);
+            buffer_set_setting(app, buffer, BufferSetting_VirtualWhitespace, false);
         } else if (match_ss(ext, make_lit_string("4proj"))) {
-            tld_current_project = tld_project_load_from_buffer(app, buffer.buffer_id, &tld_current_project_memory);
+            tld_current_project = tld_project_load_from_buffer(app, buffer->buffer_id, &tld_current_project_memory);
             tld_project_open_source_files(app, &tld_current_project, &tld_current_project_memory);
         } else {
-            buffer_set_setting(app, &buffer, BufferSetting_Lex, false);
+            buffer_set_setting(app, buffer, BufferSetting_Lex, false);
             
-            buffer_set_setting(app, &buffer, BufferSetting_WrapLine, true);
-            buffer_set_setting(app, &buffer, BufferSetting_WrapPosition, 950);
-            buffer_set_setting(app, &buffer, BufferSetting_VirtualWhitespace, false);
+            buffer_set_setting(app, buffer, BufferSetting_WrapLine, true);
+            buffer_set_setting(app, buffer, BufferSetting_WrapPosition, 950);
+            buffer_set_setting(app, buffer, BufferSetting_VirtualWhitespace, false);
         }
     }
+}
+
+OPEN_FILE_HOOK_SIG(new_file_settings) {
+    Buffer_Summary buffer = get_buffer(app, buffer_id, AccessProtected | AccessHidden);
+    get_file_settings(app, &buffer);
     
-    if (insert_header_comment) {
+    int32_t buffer_lexed = 0;
+    if (buffer_get_setting(app, &buffer, BufferSetting_Lex, &buffer_lexed) && buffer_lexed) {
         buffer_replace_range(app, &buffer, 0, 0, literal("\nNotice: No warranty is offered or implied; use this code at your own risk.\n******************************************************************************/\n\n"));
         buffer_replace_range(app, &buffer, 0, 0, literal("\nAuthor: Tristan Dannenberg"));
         buffer_replace_range(app, &buffer, 0, 0, buffer.buffer_name, buffer.buffer_name_len);
         buffer_replace_range(app, &buffer, 0, 0, literal("/******************************************************************************\nFile: "));
     }
     
+    return 0;
+}
+
+OPEN_FILE_HOOK_SIG(file_settings) {
+    Buffer_Summary buffer = get_buffer(app, buffer_id, AccessProtected | AccessHidden);
+    get_file_settings(app, &buffer);
     return 0;
 }
 
@@ -790,8 +797,8 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, 'f', MDFR_ALT, tld_interactive_find_and_replace_continued);
     bind(context, 'g', MDFR_ALT, goto_line);
     bind(context, 'h', MDFR_ALT, tld_interactive_find_and_replace_selection);
-    bind(context, 'n', MDFR_ALT, new_file);
-    bind(context, 'o', MDFR_ALT, open_file);
+    bind(context, 'n', MDFR_ALT, cmdid_interactive_new);
+    bind(context, 'o', MDFR_ALT, cmdid_interactive_open);
     bind(context, 'O', MDFR_ALT, open_all_code);
     bind(context, 'p', MDFR_ALT, cmdid_interactive_switch_buffer);
     bind(context, 'q', MDFR_ALT, cmdid_kill_buffer);
@@ -945,6 +952,7 @@ extern "C" int32_t get_bindings(void *data, int32_t size) {
     set_hook(context, hook_start, global_settings);
     
     set_open_file_hook(context, file_settings);
+    set_new_file_hook(context, new_file_settings);
     set_command_caller(context, default_command_caller);
     set_scroll_rule(context, smooth_scroll_rule);
     

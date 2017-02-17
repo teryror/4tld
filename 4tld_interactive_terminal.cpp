@@ -196,6 +196,19 @@ tld_iterm_handle_command(Application_Links *app,
         free_file_list(app, *file_list);
         *file_list = get_file_list(app, expand_str(*dir));
         tld_iterm_print_file_list(app, buffer_id, file_list);
+    } else if (match_sc(ident, "new")) {
+        char full_path_space[1024];
+        String full_path = make_fixed_width_string(full_path_space);
+        copy_ss(&full_path, *dir);
+        append_ss(&full_path, make_string(cmd.str, param_len));
+        if (file_exists(app, expand_str(full_path))) {
+            // TODO: We'll probably want to query if it should be overwritten, then?
+            tld_show_error("File already exists!");
+        } else {
+            // TODO(Test): Will this run the new_file_hook?
+            view_open_file(app, view, expand_str(full_path), false);
+            return true;
+        }
     } else if (match_sc(ident, "open")) {
         char full_path_space[1024];
         String full_path = make_fixed_width_string(full_path_space);
