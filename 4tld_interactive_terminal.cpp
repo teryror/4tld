@@ -273,12 +273,11 @@ tld_iterm_query_user_command(Application_Links *app,
             String prefix = cmd_bar->string;
             prefix.str += incomplete_string.min;
             prefix.size = incomplete_string.max - incomplete_string.min;
-            if (prefix.size == 0) continue;
             
             int32_t file_index = -1;
             while (in.type == UserInputKey && in.key.keycode == '\t') {
                 for (++file_index; file_index < file_list->count; ++file_index) {
-                    if (match_part_cs(file_list->infos[file_index].filename, prefix)) {
+                    if (match_part_insensitive_cs(file_list->infos[file_index].filename, prefix)) {
                         break;
                     }
                 }
