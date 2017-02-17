@@ -170,6 +170,7 @@ tld_query_traverse_history(User_Input in,
                            tld_StringHistory *history,
                            int32_t *history_index)
 {
+    if (in.abort) return;
     if (history->size <= 0) return;
     
     if (in.type == UserInputKey) {
@@ -197,6 +198,8 @@ tld_query_traverse_history(User_Input in,
 static void
 tld_query_complete_filenames(Application_Links *app, User_Input *in, char keycode, String *bar_string, File_List *file_list, String work_dir)
 {
+    if (in->abort) return;
+    
     if (in->type == UserInputKey && in->key.keycode == keycode) {
         Range incomplete_string = {0};
         incomplete_string.max = bar_string->size;

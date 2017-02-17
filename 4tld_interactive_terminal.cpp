@@ -184,10 +184,10 @@ tld_iterm_query_user_command(Application_Links *app,
     while (true) {
         User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
         
-        if (in.abort) return false;
-        
         tld_query_complete_filenames(app, &in, '\t', &cmd_bar->string, file_list, dir_bar->string);
         tld_query_traverse_history(in, key_up, key_down, &cmd_bar->string, history, &cmd_history_index);
+        
+        if (in.abort) return false;
         
         bool good_character = false;
         if (key_is_unmodified(&in.key) && in.key.character != 0) {
