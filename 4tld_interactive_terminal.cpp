@@ -5,67 +5,6 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 ******************************************************************************/
 #include "4tld_user_interface.h"
 
-// NOTE: This is only needed because directory_cd(6) is broken...
-static bool
-tld_change_directory(String *dir, String rel_path) {
-    bool success = false;
-    
-    String _dir;
-    _dir.str         = (char *) malloc(dir->memory_size);
-    _dir.size        = 0;
-    _dir.memory_size = dir->memory_size;
-    
-    append_ss(&_dir, *dir);
-    
-    while (rel_path.size > 0) {
-        String rel_path_element;
-        rel_path_element.str = rel_path.str;
-        rel_path_element.size = 0;
-        
-        while (rel_path.str[rel_path_element.size] != '/' &&
-               rel_path.str[rel_path_element.size] != '\\' &&
-               rel_path_element.size < rel_path.size)
-        {
-            ++rel_path_element.size;
-        }
-        
-        if (rel_path_element.size == rel_path.size) {
-            rel_path.size = 0;
-        } else {
-            rel_path.str += rel_path_element.size + 1;
-            rel_path.size -= rel_path_element.size + 1;
-        }
-        
-        if (match_sc(rel_path_element, "..")) {
-            if (_dir.size > 0 && (_dir.str[_dir.size - 1] == '/' ||
-                                  _dir.str[_dir.size - 1] == '\\'))
-            {
-                _dir.size -= 1;
-            }
-            _dir = path_of_directory(_dir);
-        } else if (match_sc(rel_path_element, ".")) {
-            // Do nothing -- we're already in the current directory
-        } else {
-            append_ss(&_dir, rel_path_element);
-            append_s_char(&_dir, '/');
-        }
-    }
-    
-    /* file_exists() returns false on directories,
-     * and I don't want to write OS specific code here,
-     * though this does make the cd command kind of annoying...
-    if (file_exists(app, expand_str(_dir))) */
-    {
-        success = true;
-        
-        dir->size = 0;
-        append_ss(dir, _dir);
-    }
-    
-    free(_dir.str);
-    return success;
-}
-
 #ifdef TLDPM_IMPLEMENT_COMMANDS
 static void
 tld_iterm_get_home_directory(Application_Links *app, String *dest) {

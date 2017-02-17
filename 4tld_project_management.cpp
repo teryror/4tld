@@ -125,10 +125,7 @@ void tld_project_open_source_files(Application_Links *app, tld_Project *project,
         // TODO(Polish): Get directory_cd to work
         // it only seems to work with literal("..") as the relative path
         
-        append_ss(&dir, project->source_directory);
-        if (dir.str[dir.size - 1] != '/' && dir.str[dir.size - 1] != '\\') {
-            append_sc(&dir, "/");
-        }
+        tld_change_directory(&dir, project->source_directory);
     }
     
     open_all_files_with_extension_internal(app, dir, extension_list, extension_count, false);
