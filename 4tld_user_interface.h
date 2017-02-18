@@ -251,7 +251,7 @@ tld_query_complete_filenames(Application_Links *app, User_Input *in, char keycod
                 file_index = -1;
             }
             
-            *in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
+            *in = get_user_input(app, EventOnAnyKey, EventOnEsc);
         }
         
         if (!in_work_dir) {

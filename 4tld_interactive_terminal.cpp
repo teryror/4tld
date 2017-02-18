@@ -5,18 +5,10 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 ******************************************************************************/
 #include "4tld_user_interface.h"
 
-#ifdef TLDPM_IMPLEMENT_COMMANDS
+#ifndef TLD_HOME_DIRECTORY
+#define TLD_HOME_DIRECTORY
 static void
-tld_iterm_get_home_directory(Application_Links *app, String *dest) {
-    if (tld_current_project.working_directory.str) {
-        copy_ss(dest, tld_current_project.working_directory);
-    } else {
-        dest->size = directory_get_hot(app, dest->str, dest->memory_size);
-    }
-}
-#else
-static void
-tld_iterm_get_home_directory(Application_Links *app, String *dest) {
+tld_get_home_directory(Application_Links *app, String *dest) {
     dest->size = directory_get_hot(app, dest->str, dest->memory_size);
 }
 #endif
@@ -131,7 +123,7 @@ tld_iterm_handle_command(Application_Links *app,
             tld_iterm_print_file_list(app, buffer_id, file_list);
         }
     } else if (match_sc(ident, "home")) {
-        tld_iterm_get_home_directory(app, dir);
+        tld_get_home_directory(app, dir);
         free_file_list(app, *file_list);
         *file_list = get_file_list(app, expand_str(*dir));
         tld_iterm_print_file_list(app, buffer_id, file_list);
@@ -182,7 +174,7 @@ tld_iterm_query_user_command(Application_Links *app,
     int32_t cmd_history_index = history->size - 1;
     
     while (true) {
-        User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
+        User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
         
         tld_query_complete_filenames(app, &in, '\t', &cmd_bar->string, file_list, dir_bar->string);
         tld_query_traverse_history(in, key_up, key_down, &cmd_bar->string, history, &cmd_history_index);
@@ -253,7 +245,7 @@ tld_iterm_init_session(Application_Links *app,
     
     if (tld_iterm_working_directory.str == 0) {
         tld_iterm_working_directory = make_fixed_width_string(tld_iterm_working_directory_space);
-        tld_iterm_get_home_directory(app, &tld_iterm_working_directory);
+        tld_get_home_directory(app, &tld_iterm_working_directory);
     }
     
     Buffer_Summary buffer_summary;

@@ -13,6 +13,8 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 #define TLDPM_IMPLEMENT_COMMANDS
 #include "4tld_project_management.cpp"
 
+#include "4tld_fuzzy_match.cpp"
+
 #define TLDIT_IMPLEMENT_COMMANDS
 #include "4tld_interactive_terminal.cpp"
 
@@ -799,7 +801,7 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, 'h', MDFR_ALT, tld_interactive_find_and_replace_selection);
     bind(context, 'n', MDFR_ALT, cmdid_interactive_new);
     bind(context, 'o', MDFR_ALT, cmdid_interactive_open);
-    bind(context, 'O', MDFR_ALT, open_all_code);
+    bind(context, 'O', MDFR_ALT, tld_open_file_fuzzy);
     bind(context, 'p', MDFR_ALT, cmdid_interactive_switch_buffer);
     bind(context, 'q', MDFR_ALT, cmdid_kill_buffer);
     bind(context, 'r', MDFR_ALT, replace_range);

@@ -6,7 +6,7 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 #include "4tld_user_interface.h"
 
 #ifndef TLDPM_BUILD_CONFIGURATIONS_CAPACITY
-#define TLDPM_BUILD_CONFIGURATIONS_CAPACITY 16
+#define TLDPM_BUILD_CONFIGURATIONS_CAPACITY 7
 #endif
 
 #ifndef TLDPM_SOURCE_EXTENSIONS
@@ -137,6 +137,18 @@ void tld_project_open_source_files(Application_Links *app, tld_Project *project,
 static tld_Project tld_current_project = {0};
 static void *__tld_current_project_memory_internal = {0};
 static Partition tld_current_project_memory = {0};
+
+#ifndef TLD_HOME_DIRECTORY
+#define TLD_HOME_DIRECTORY
+static void
+tld_get_home_directory(Application_Links *app, String *dest) {
+    if (tld_current_project.working_directory.str) {
+        copy_ss(dest, tld_current_project.working_directory);
+    } else {
+        dest->size = directory_get_hot(app, dest->str, dest->memory_size);
+    }
+}
+#endif
 
 void tld_project_memory_init() {
     int32_t size = 8 * 1024;
