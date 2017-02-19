@@ -164,8 +164,10 @@ tld_iterm_handle_command(Application_Links *app,
     return false;
 }
 
-#ifndef TLD_DEFAULT_OPEN_FILE_COMMAND
-#define TLD_DEFAULT_OPEN_FILE_COMMAND cmdid_interactive_open
+#ifdef TLDFM_IMPLEMENT_COMMANDS
+#define tld_iterm_open_file_interactive(app, view, work_dir) __tld_open_file_fuzzy_impl(app, view, work_dir)
+#else
+#define tld_iterm_open_file_interactive(...) exec_command(app, cmdid_interactive_open)
 #endif
 
 static bool
@@ -180,7 +182,7 @@ tld_iterm_query_user_command(Application_Links *app,
     while (true) {
         User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
         
-        tld_query_complete_filenames(app, &in, '\t', &cmd_bar->string, file_list, dir_bar->string);
+        tld_query_complete_filenames(app, &in, '\t', &cmd_bar->string, file_list, dir_bar->prompt);
         tld_query_traverse_history(in, key_up, key_down, &cmd_bar->string, history, &cmd_history_index);
         
         if (in.abort) return false;
@@ -199,7 +201,7 @@ tld_iterm_query_user_command(Application_Links *app,
                 end_query_bar(app, cmd_bar, 0);
                 end_query_bar(app, dir_bar, 0);
                 
-                exec_command(app, TLD_DEFAULT_OPEN_FILE_COMMAND);
+                tld_iterm_open_file_interactive(app, view, dir_bar->string);
                 return false;
             } else if (in.key.keycode == 'q' && in.key.modifiers[MDFR_ALT]) {
                 exec_command(app, kill_buffer);

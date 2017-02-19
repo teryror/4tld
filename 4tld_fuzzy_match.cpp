@@ -293,16 +293,12 @@ tld_fuzzy_construct_filename_list(Application_Links *app,
     return result;
 }
 
-CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
+static void
+__tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String work_dir) {
     int32_t mem_size = 1024 * 1024;
     Partition mem = make_part(malloc(mem_size), mem_size);
     
-    View_Summary view = get_active_view(app, AccessAll);
-    
-    char home_directory_space[1024];
-    String home_directory = make_fixed_width_string(home_directory_space);
-    tld_get_home_directory(app, &home_directory);
-    tld_StringList search_space = tld_fuzzy_construct_filename_list(app, home_directory, &mem, TLDFM_DEFAULT_DIR_FILTER);
+    tld_StringList search_space = tld_fuzzy_construct_filename_list(app, work_dir, &mem, TLDFM_DEFAULT_DIR_FILTER);
     
     Query_Bar search_bar;
     char search_bar_space[TLDFM_MAX_QUERY_SIZE];
@@ -314,13 +310,23 @@ CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
     if (selected_file.str) {
         char full_path_space[1024];
         String full_path = make_fixed_width_string(full_path_space);
-        copy_ss(&full_path, home_directory);
+        copy_ss(&full_path, work_dir);
         append_ss(&full_path, selected_file);
         
-        view_open_file(app, &view, expand_str(full_path), false);
+        view_open_file(app, view, expand_str(full_path), false);
     }
     
     free(mem.base);
+}
+
+CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
+    View_Summary view = get_active_view(app, AccessAll);
+    
+    char home_directory_space[1024];
+    String home_directory = make_fixed_width_string(home_directory_space);
+    tld_get_home_directory(app, &home_directory);
+    
+    __tld_open_file_fuzzy_impl(app, &view, home_directory);
 }
 
 #endif
