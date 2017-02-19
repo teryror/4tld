@@ -201,7 +201,7 @@ tld_iterm_query_user_command(Application_Links *app,
                 end_query_bar(app, cmd_bar, 0);
                 end_query_bar(app, dir_bar, 0);
                 
-                tld_iterm_open_file_interactive(app, view, dir_bar->string);
+                tld_iterm_open_file_interactive(app, view, dir_bar->prompt);
                 return false;
             } else if (in.key.keycode == 'q' && in.key.modifiers[MDFR_ALT]) {
                 exec_command(app, kill_buffer);
