@@ -329,4 +329,33 @@ CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
     __tld_open_file_fuzzy_impl(app, &view, home_directory);
 }
 
+CUSTOM_COMMAND_SIG(tld_switch_buffer_fuzzy) {
+    String list_space[128];
+    tld_StringList search_space = {0};
+    search_space.values = list_space;
+    
+    for (Buffer_Summary buffer = get_buffer_first(app, AccessAll);
+         buffer.exists && search_space.count < 128;
+         get_buffer_next(app, &buffer, AccessAll))
+    {
+        String buffer_name = make_string(buffer.buffer_name, buffer.buffer_name_len);
+        search_space.values[search_space.count] = buffer_name;
+        
+        ++search_space.count;
+    }
+    
+    Query_Bar search_bar;
+    char search_bar_space[TLDFM_MAX_QUERY_SIZE];
+    search_bar.prompt = make_lit_string("Switch Bufer: ");
+    search_bar.string = make_fixed_width_string(search_bar_space);
+    start_query_bar(app, &search_bar, 0);
+    
+    String buffer_name = tld_query_list_fuzzy(app, &search_bar, search_space);
+    if (buffer_name.str) {
+        View_Summary view = get_active_view(app, AccessAll);
+        Buffer_Summary buffer = get_buffer_by_name(app, expand_str(buffer_name), AccessAll);
+        view_set_buffer(app, &view, buffer.buffer_id, 0);
+    }
+}
+
 #endif

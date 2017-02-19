@@ -802,7 +802,7 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, 'h', MDFR_ALT, tld_interactive_find_and_replace_selection);
     bind(context, 'n', MDFR_ALT, cmdid_interactive_new);
     bind(context, 'o', MDFR_ALT, tld_open_file_fuzzy);
-    bind(context, 'p', MDFR_ALT, cmdid_interactive_switch_buffer);
+    bind(context, 'p', MDFR_ALT, tld_switch_buffer_fuzzy);
     bind(context, 'q', MDFR_ALT, cmdid_kill_buffer);
     bind(context, 'r', MDFR_ALT, replace_range);
     bind(context, 's', MDFR_ALT, smart_save);

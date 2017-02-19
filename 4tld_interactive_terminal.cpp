@@ -165,9 +165,15 @@ tld_iterm_handle_command(Application_Links *app,
 }
 
 #ifdef TLDFM_IMPLEMENT_COMMANDS
+
+#define tld_iterm_switch_buffer_command tld_switch_buffer_fuzzy
 #define tld_iterm_open_file_interactive(app, view, work_dir) __tld_open_file_fuzzy_impl(app, view, work_dir)
+
 #else
+
+#define tld_iterm_switch_buffer_command cmdid_interactive_switch_buffer
 #define tld_iterm_open_file_interactive(...) exec_command(app, cmdid_interactive_open)
+
 #endif
 
 static bool
@@ -207,7 +213,10 @@ tld_iterm_query_user_command(Application_Links *app,
                 exec_command(app, kill_buffer);
                 return false;
             } else if (in.key.keycode == 'p' && in.key.modifiers[MDFR_ALT]) {
-                exec_command(app, cmdid_interactive_switch_buffer);
+                end_query_bar(app, cmd_bar, 0);
+                end_query_bar(app, dir_bar, 0);
+                
+                exec_command(app, tld_iterm_switch_buffer_command);
                 return false;
             } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
                 char *append_pos =   cmd_bar->string.str + cmd_bar->string.size;
