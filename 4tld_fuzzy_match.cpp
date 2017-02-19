@@ -63,53 +63,10 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
     
     int result_count = 0;
     int result_selected_index = 0;
+    bool search_key_changed = true;
+    bool selected_index_changed = true;
     
     while (true) {
-        User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
-        bool search_key_changed = false;
-        bool selected_index_changed = false;
-        
-        if (in.abort) return {0};
-        
-        if (in.type == UserInputKey) {
-            if (in.key.keycode == '\n') {
-                if (result_count > 0) {
-                    if (result_selected_index < 0)
-                        result_selected_index = 0;
-                    return result_bars[result_selected_index].prompt;
-                }
-            } else if (in.key.keycode == key_back) {
-                if (search_bar->string.size > 0) {
-                    --search_bar->string.size;
-                    search_key_changed = true;
-                }
-            } else if (in.key.keycode == key_del) {
-                search_bar->string.size = 0;
-                result_selected_index = 0;
-                
-                for (int i = result_count - 1; i >= 0; --i) {
-                    end_query_bar(app, &result_bars[i], 0);
-                }
-            } else if (in.key.keycode == key_up) {
-                selected_index_changed = true;
-                
-                --result_selected_index;
-                if (result_selected_index < 0) {
-                    result_selected_index = result_count - 1;
-                }
-            } else if (in.key.keycode == key_down) {
-                selected_index_changed = true;
-                
-                ++result_selected_index;
-                if (result_selected_index >= result_count) {
-                    result_selected_index = 0;
-                }
-            } else if (key_is_unmodified(&in.key) && in.key.character != 0) {
-                append_s_char(&search_bar->string, in.key.character);
-                search_key_changed = true;
-            }
-        }
-        
         if (search_key_changed) {
             end_query_bar(app, search_bar, 0);
             result_selected_index = 0;
@@ -185,6 +142,51 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                     result_bars[i].prompt = empty;
                     result_bars[i].string = results[i];
                 }
+            }
+        }
+        
+        User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+        selected_index_changed = false;
+        search_key_changed = false;
+        
+        if (in.abort) return {0};
+        
+        if (in.type == UserInputKey) {
+            if (in.key.keycode == '\n') {
+                if (result_count > 0) {
+                    if (result_selected_index < 0)
+                        result_selected_index = 0;
+                    return result_bars[result_selected_index].prompt;
+                }
+            } else if (in.key.keycode == key_back) {
+                if (search_bar->string.size > 0) {
+                    --search_bar->string.size;
+                    search_key_changed = true;
+                }
+            } else if (in.key.keycode == key_del) {
+                search_bar->string.size = 0;
+                result_selected_index = 0;
+                
+                for (int i = result_count - 1; i >= 0; --i) {
+                    end_query_bar(app, &result_bars[i], 0);
+                }
+            } else if (in.key.keycode == key_up) {
+                selected_index_changed = true;
+                
+                --result_selected_index;
+                if (result_selected_index < 0) {
+                    result_selected_index = result_count - 1;
+                }
+            } else if (in.key.keycode == key_down) {
+                selected_index_changed = true;
+                
+                ++result_selected_index;
+                if (result_selected_index >= result_count) {
+                    result_selected_index = 0;
+                }
+            } else if (key_is_unmodified(&in.key) && in.key.character != 0) {
+                append_s_char(&search_bar->string, in.key.character);
+                search_key_changed = true;
             }
         }
     }
