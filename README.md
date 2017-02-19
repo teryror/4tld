@@ -25,6 +25,11 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   setup -- see the actual implementation of the default commands for reference.
   If you first include 4tld\_project\_management.cpp with the default commands,
   the project's working directory is used as the home directory for the terminal.
+* **4tld\_fuzzy\_match.cpp** is a WIP copy of the fuzzy file search many know
+  and love from Sublime and TextMate. Right now, it has a generic, though
+  extremely dumb string matching function, utilities for constructing a
+  list of all files in a directories and its subdirectories, and a functioning
+  custom command utilizing them.
 * **4tld\_user\_interface.h** is intended for utility functions pertaining to
   view management, scroll rules, query bars and other miscellaneous UI features.
   Note that all the drop-in command packs depend on this file.
@@ -43,10 +48,6 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   I would love to bring that back in a more robust fashion.
 * The existing `git_quick_save` command is pretty useful, and I would like to do
   more to make version control invisible.
-* While implementing the terminal I came up with some other cool ways to interact
-  with the file system: Fuzzy file opening (and a matching switch buffer command)
-  similar to sublime, and a directory editor, similar to dired mode in emacs.
-  Both of these would get integrated into the terminal to some degree.
 * Finally, I've been putting off a clean-up pass since about version 4.0.5, when
   I wrote the original version of these customizations. I really need to clean up
   the way I handle panels, and should make sure behaviour between commands is more
