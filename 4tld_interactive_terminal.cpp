@@ -164,6 +164,10 @@ tld_iterm_handle_command(Application_Links *app,
     return false;
 }
 
+#ifndef TLD_DEFAULT_OPEN_FILE_COMMAND
+#define TLD_DEFAULT_OPEN_FILE_COMMAND cmdid_interactive_open
+#endif
+
 static bool
 tld_iterm_query_user_command(Application_Links *app,
                              Buffer_Identifier buffer, View_Summary *view,
@@ -191,6 +195,12 @@ tld_iterm_query_user_command(Application_Links *app,
                 tld_string_history_push(history, cmd_bar->string);
                 cmd_history_index = history->size - 1;
                 return true;
+            } else if (in.key.keycode == 'o' && in.key.modifiers[MDFR_ALT]) {
+                end_query_bar(app, cmd_bar, 0);
+                end_query_bar(app, dir_bar, 0);
+                
+                exec_command(app, TLD_DEFAULT_OPEN_FILE_COMMAND);
+                return false;
             } else if (in.key.keycode == 'q' && in.key.modifiers[MDFR_ALT]) {
                 exec_command(app, kill_buffer);
                 return false;

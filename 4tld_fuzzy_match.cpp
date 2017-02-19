@@ -4,6 +4,8 @@ Author: Tristan Dannenberg
 Notice: No warranty is offered or imlied; use this code at your own risk.
 ******************************************************************************/
 
+#define TLDFM_DIR_FILTER_SIG(name) static bool name(char *filename, int32_t filename_len)
+
 #ifndef TLD_HOME_DIRECTORY
 #define TLD_HOME_DIRECTORY
 static void
@@ -188,32 +190,119 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
     }
 }
 
-// TODO: This is terribly inefficient, and pretty unsafe to boot, but it is
-// just a temporary solution until we bother implementing recursive file listing.
+#ifdef TLDFM_IMPLEMENT_COMMANDS
+
+#ifndef TLD_DEFAULT_OPEN_FILE_COMMAND
+#define TLD_DEFAULT_OPEN_FILE_COMMAND tld_open_file_fuzzy
+#endif
+
+#ifndef TLDFM_DEFAULT_DIR_FILTER
+#define TLDFM_DEFAULT_DIR_FILTER tld_ignore_hidden_files
+TLDFM_DIR_FILTER_SIG(tld_ignore_hidden_files) {
+    bool result = false;
+    if (filename_len > 0) {
+        result = (filename[0] == '.');
+    }
+    return result;
+}
+#endif
+
+#ifndef TLDFM_FILE_LIST_CAPACITY
+#define TLDFM_FILE_LIST_CAPACITY 1024
+#endif
+
+#ifndef TLDFM_DIR_QUEUE_CAPACITY
+#define TLDFM_DIR_QUEUE_CAPACITY (TLDFM_FILE_LIST_CAPACITY / 16)
+#endif
+
 static tld_StringList
-tld_fuzzy_construct_filename_list(File_List *files) {
+tld_fuzzy_construct_filename_list(Application_Links *app,
+                                  String work_dir,
+                                  Partition *memory,
+                                  bool (*dir_filter)(char *, int32_t))
+{
     tld_StringList result = {0};
-    result.values = (String *) malloc(sizeof(String) * files->count);
+    result.values = push_array(memory, String, TLDFM_FILE_LIST_CAPACITY);
     
-    for (int i = 0; i < files->count; ++i) {
-        File_Info info = files->infos[i];
-        if (info.folder) continue;
+    File_List dir_queue_infos[TLDFM_DIR_QUEUE_CAPACITY];
+    String    dir_queue_names[TLDFM_DIR_QUEUE_CAPACITY];
+    
+    dir_queue_infos[0] = get_file_list(app, expand_str(work_dir));
+    dir_queue_names[0] = make_lit_string("");
+    int32_t dir_queue_index_read = 0;
+    int32_t dir_queue_index_write = 1;
+    
+    while (dir_queue_index_read < dir_queue_index_write)
+    {
+        File_List dir_info = dir_queue_infos[dir_queue_index_read % TLDFM_DIR_QUEUE_CAPACITY];
         
-        result.values[result.count] = make_string(info.filename, info.filename_len);
-        result.count += 1;
+        String dir_name = dir_queue_names[dir_queue_index_read % TLDFM_DIR_QUEUE_CAPACITY];
+        dir_queue_index_read += 1;
+        
+        for (int i = 0; i < dir_info.count; ++i) {
+            if (result.count >= TLDFM_FILE_LIST_CAPACITY) break;
+            File_Info info_i = dir_info.infos[i];
+            
+            if (info_i.folder) {
+                // No point in allocating at all if the queue is full
+                if ((dir_queue_index_write - dir_queue_index_read) >= TLDFM_DIR_QUEUE_CAPACITY)
+                    continue;
+                
+                if (dir_filter && dir_filter(info_i.filename, info_i.filename_len))
+                    continue;
+                
+                int32_t filename_size = dir_name.size + info_i.filename_len + 1;
+                char *filename_space = (char *)partition_allocate(memory, filename_size);
+                if (filename_space)
+                {
+                    int32_t target_i = dir_queue_index_write % TLDFM_DIR_QUEUE_CAPACITY;
+                    
+                    dir_queue_names[target_i].str = filename_space;
+                    dir_queue_names[target_i].memory_size = filename_size;
+                    
+                    copy_ss(&dir_queue_names[target_i], dir_name);
+                    append_ss(&dir_queue_names[target_i],
+                              make_string(info_i.filename, info_i.filename_len));
+                    append_s_char(&dir_queue_names[target_i], '/');
+                    
+                    int32_t work_dir_old_size = work_dir.size;
+                    append_ss(&work_dir, dir_queue_names[target_i]);
+                    dir_queue_infos[target_i] = get_file_list(app, expand_str(work_dir));
+                    work_dir.size = work_dir_old_size;
+                    
+                    dir_queue_index_write += 1;
+                }
+            } else {
+                int32_t filename_size = dir_name.size + info_i.filename_len;
+                char *filename_space = (char *)partition_allocate(memory, filename_size);
+                if (filename_space) {
+                    result.values[result.count].str = filename_space;
+                    result.values[result.count].memory_size = filename_size;
+                    copy_ss(&result.values[result.count], dir_name);
+                    append_ss(&result.values[result.count],
+                              make_string(info_i.filename, info_i.filename_len));
+                    
+                    result.count += 1;
+                }
+            }
+        }
+        
+        free_file_list(app, dir_info);
     }
     
     return result;
 }
 
 CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
+    int32_t mem_size = 1024 * 1024;
+    Partition mem = make_part(malloc(mem_size), mem_size);
+    
     View_Summary view = get_active_view(app, AccessAll);
     
     char home_directory_space[1024];
     String home_directory = make_fixed_width_string(home_directory_space);
     tld_get_home_directory(app, &home_directory);
-    File_List files = get_file_list(app, expand_str(home_directory));
-    tld_StringList search_space = tld_fuzzy_construct_filename_list(&files);
+    tld_StringList search_space = tld_fuzzy_construct_filename_list(app, home_directory, &mem, TLDFM_DEFAULT_DIR_FILTER);
     
     Query_Bar search_bar;
     char search_bar_space[TLDFM_MAX_QUERY_SIZE];
@@ -222,13 +311,16 @@ CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
     start_query_bar(app, &search_bar, 0);
     
     String selected_file = tld_query_list_fuzzy(app, &search_bar, search_space);
+    if (selected_file.str) {
+        char full_path_space[1024];
+        String full_path = make_fixed_width_string(full_path_space);
+        copy_ss(&full_path, home_directory);
+        append_ss(&full_path, selected_file);
+        
+        view_open_file(app, &view, expand_str(full_path), false);
+    }
     
-    char full_path_space[1024];
-    String full_path = make_fixed_width_string(full_path_space);
-    copy_ss(&full_path, home_directory);
-    append_ss(&full_path, selected_file);
-    
-    view_open_file(app, &view, expand_str(full_path), false);
-    
-    free(search_space.values);
+    free(mem.base);
 }
+
+#endif
