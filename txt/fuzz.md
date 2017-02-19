@@ -68,7 +68,7 @@ Now, remember that `match(i, j)` is supposed to be the score for the pair of _pr
 
     match(i, j) = match(i, j - 1) || (match(i - 1, j - 1) && A[i] == B[j])
 
-Since I haven't actually implemented any of this yet, this is where I take a break to do so, to check my reasoning. Temporarily storing a paragraph like this in the history of the article is one advantage of keeping the devblog in the same repository as the actual code!
+Since I haven't actually implemented any of this yet, this is where I take a break to do so, to check my reasoning. Temporarily storing a paragraph like this in the history of the article is one advantage of keeping the devblog in the same repository as the actual code! -- Turns out it works!
 
 [1]: https://blog.forrestthewoods.com/reverse-engineering-sublime-text-s-fuzzy-match-4cffeed33fdb#.d05n81yjy
 [2]: https://www.reddit.com/r/programming/comments/4cfz8r/reverse_engineering_sublime_texts_fuzzy_match/d1i7unr/

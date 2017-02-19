@@ -19,13 +19,7 @@ tld_get_home_directory(Application_Links *app, String *dest) {
 #define TLDFM_MAX_QUERY_SIZE 64
 #endif
 
-// TODO: This isn't an actual heuristic to sort by, just a check whether val
-// contains all characters in key, in order.
-// 
-// We're looking for a modified Wagner-Fischer algorithm (hopefully optimized
-// to allocate constant memory!), with extra goodies, such as bonuses for
-// proximity to beginning of val, consecutive matches, and matches following
-// separators (CamelCase, snake_case, lisp-case, object.notation, file/paths).
+#ifdef TLDFM_DUMB_HEURISTIC
 static int32_t
 tld_fuzzy_match_ss(String key, String val) {
     if (val.size < key.size) return 0;
@@ -44,6 +38,50 @@ tld_fuzzy_match_ss(String key, String val) {
     if (i == key.size) return 1;
     return 0;
 }
+#else
+
+static int32_t
+tld_fuzzy_match_ss_old(String key, String val) {
+    if (val.size < key.size) return 0;
+    
+    int i = 0, j = 0;
+    while (i < key.size && j < val.size) {
+        if ((char_is_upper(key.str[i]) && key.str[i] == val.str[j]) ||
+            (key.str[i] == char_to_lower(val.str[j])))
+        {
+            ++i;
+        }
+        
+        ++j;
+    }
+    
+    if (i == key.size) return 1;
+    return 0;
+}
+
+static int32_t
+tld_fuzzy_match_ss(String key, String val) {
+    int32_t row[TLDFM_MAX_QUERY_SIZE + 1] = {0};
+    row[0] = 1;
+    
+    for (int j = 0; j < val.size; ++j) {
+        int32_t diag = 1;
+        
+        for (int i = 1; i <= key.size; ++i) {
+            int32_t match = (char_is_upper(key.str[i - 1]) && key.str[i - 1] == val.str[j]) ||
+                (key.str[i - 1] == char_to_lower(val.str[j]));
+            
+            int32_t row_old = row[i];
+            row[i] = row[i] || (diag && match);
+            diag = row_old;
+        }
+    }
+    
+    Assert(row[key.size] == tld_fuzzy_match_ss_old(key, val));
+    
+    return row[key.size];
+}
+#endif
 
 struct tld_StringList {
     String *values;
