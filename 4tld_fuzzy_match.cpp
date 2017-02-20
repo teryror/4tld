@@ -40,47 +40,80 @@ tld_fuzzy_match_ss(String key, String val) {
 }
 #else
 
-static int32_t
-tld_fuzzy_match_ss_old(String key, String val) {
-    if (val.size < key.size) return 0;
-    
-    int i = 0, j = 0;
-    while (i < key.size && j < val.size) {
-        if ((char_is_upper(key.str[i]) && key.str[i] == val.str[j]) ||
-            (key.str[i] == char_to_lower(val.str[j])))
-        {
-            ++i;
-        }
-        
-        ++j;
-    }
-    
-    if (i == key.size) return 1;
-    return 0;
+static inline bool
+tld_char_is_separator(char a) {
+    return (a == ' ' || a == '_' || a == '-' ||
+            a == '.' || a == '/' || a == '\\');
 }
+
+static inline bool
+tld_fuzzy_match_char(char a, char b) {
+    return ((char_to_lower(a) == char_to_lower(b)) ||
+            (char_is_upper(a) && a == b) ||
+            (a == ' ' && tld_char_is_separator(b))
+            );
+}
+
+#ifndef max
+#define max(a, b) ((a > b) ? a : b)
+#endif
 
 static int32_t
 tld_fuzzy_match_ss(String key, String val) {
-    int32_t row[TLDFM_MAX_QUERY_SIZE + 1] = {0};
-    row[0] = 1;
+    if (key.size == 0) {
+        return 1;
+    }
     
-    for (int j = 0; j < val.size; ++j) {
-        int32_t diag = 1;
+    // Optimization 1: Skip table rows
+    int j = 0;
+    while (j < val.size && !tld_fuzzy_match_char(key.str[0], val.str[j])) {
+        ++j;
+    }
+    
+    if (val.size - j < key.size) {
+        return 0;
+    }
+    
+    int32_t row[TLDFM_MAX_QUERY_SIZE] = {0};
+    
+    int32_t proximity_bonus_max;
+    if (key.size < 4) {
+        proximity_bonus_max = 2 * key.size;
+    } else {
+        proximity_bonus_max = 3 * key.size;
+    }
+    proximity_bonus_max /= 4;
+    
+    for (; j < val.size; ++j) {
+        int32_t diag = proximity_bonus_max * (val.size - j) / val.size + 1;
         
-        for (int i = 1; i <= key.size; ++i) {
-            int32_t match = (char_is_upper(key.str[i - 1]) && key.str[i - 1] == val.str[j]) ||
-                (key.str[i - 1] == char_to_lower(val.str[j]));
-            
+        for (int i = 0; i < key.size; ++i) {
             int32_t row_old = row[i];
-            row[i] = row[i] || (diag && match);
+            
+            if (diag > 0 && tld_fuzzy_match_char(key.str[i], val.str[j])) {
+                int32_t value = 1;
+                
+                if (j == 0 || (char_is_lower(val.str[j - 1]) && char_is_upper(val.str[j])) ||
+                    tld_char_is_separator(val.str[j - 1]))
+                {   // Abbreviation bonus:
+                    value += 3;
+                }
+                
+                if (i > 0 && j > 0 && tld_fuzzy_match_char(key.str[i - 1], val.str[j - 1]))
+                {   // Sequential match bonus:
+                    value += 4;
+                }
+                
+                row[i] = max(diag + value, row[i]);
+            }
+            
             diag = row_old;
         }
     }
     
-    Assert(row[key.size] == tld_fuzzy_match_ss_old(key, val));
-    
-    return row[key.size];
+    return row[key.size - 1];
 }
+
 #endif
 
 struct tld_StringList {
@@ -153,9 +186,9 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
             for (int i = 0; i < result_count - 1; ++i) {
                 for (int j = i + 1; j < result_count; ++j) {
                     if (result_scores[i] < result_scores[j]) {
-                        String s = result_bars[i].string;
-                        result_bars[i].string = result_bars[j].string;
-                        result_bars[j].string = s;
+                        String s = results[i];
+                        results[i] = results[j];
+                        results[j] = s;
                         
                         int32_t c = result_scores[i];
                         result_scores[i] = result_scores[j];
@@ -194,7 +227,7 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                 if (result_count > 0) {
                     if (result_selected_index < 0)
                         result_selected_index = 0;
-                    return result_bars[result_selected_index].prompt;
+                    return results[result_selected_index];
                 }
             } else if (in.key.keycode == key_back) {
                 if (search_bar->string.size > 0) {

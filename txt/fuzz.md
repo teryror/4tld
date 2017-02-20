@@ -169,12 +169,14 @@ And with that, we finally have the full heuristic:
         score(i, j - 1)
     }
 
-It's time to implement it, and see how it does!
+Even with a naive transcription into the Wagner-Fischer algorithm, this is imperceptebly fast when searching a file list of 1000+ elements; I can type in a patter with no noticeable input lag.
+
+Searching a list of a thousand elements is laughable, though. Computers are seriously fast. I doubt 4tld will ever need anything faster than this implementation, but I can think of both some low hanging fruit and more involved optimizations, with larger impact on our code.
 
 ## Optimizations
-We now have a heuristic to give us a decent score for any given pattern vs. any given string, and an algorithm to evaluate it. Now, can we make it faster?
+So, how can we make this go faster?
 
-I can think of three optimizations - two of which are mutually exclusive (unless we're trying to match extremely long patterns), while one will compound equally with either of the two, by potentially recognizing non-matches more quickly.
+I can think of a number of optimizations - some of which are mutually exclusive (unless we're trying to match extremely long patterns), while some will compound equally with any of the others.
 
 Starting with that last one, since the first row of the table (full pattern vs. empty string) is constant, and, in our heuristic at least, the only value that will change in the iterations before the first match is the first cell (representing the empty pattern vs. string prefix of length `j`, which is computed independently of the actual heuristic), we can skip evaluating all rows before the first match, by linearly scannnig the string. We can then also insert an early exit, if there are not enough characters left in the string to match the full pattern.
 
@@ -209,6 +211,9 @@ The first of the two other optimizations relies on a similar realization that so
 The `\|` indicate data dependencies. Since the first row is constant, the triangle of `0` at the top right is constant as well, while the triangle of `_` at the bottom left does not affect `X`, the score of the match, at all. That means that we can shave off an additional `m^2` evaluations of our heuristic by reshaping the loop boundaries of the algorithm.
 
 The alternative is to use SIMD instructions to evaluate 16 cells of the table at a time, though this does require reshaping our heuristic again, to use bitwise operations and other math tricks to get rid of the conditional operations. I haven't tried doing that yet, but I feel like it should be possible.
+We can also try repalcing the ringbuffer with a double buffer, which would allow us to take advantage of instruction level parallelism.
+
+Whether we end up vectorizing or not, replacing some of the branching with math operations should prevent some pipeline flushes due to branch misprediction, so we should really consider doing this anyway.
 
 This concludes the topic of optimization for now, we'll come back to it once I actually implemented the heuristic and can profile all our options here.
 
