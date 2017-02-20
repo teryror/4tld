@@ -134,7 +134,48 @@ Next, we'll consider a simple case to determine constraints on `S`: given a patt
 
 I'd like to keep the average score as low as possible, to simplify a few things in the implementation, so I'll arbitrarily set `Ca = 1`, giving `Cb = M + 1` and `S = M - 1` (you could also set `Cb = z * M + 1, S = z * (M - 1)`, if you desired a larger `Cb - Ca` for some reason). With that, we defined one easy-to-grasp parameter to tune three of our constants with. That just leaves `P`.
 
-However, I'm tired, and will derive its optimal value in the next commit. Good night to anyone reading this!
+However, I'm tired, and will derive its optimal value in the next commit -- or not, as I just had a stroke of inspiration concerning how to optimize this, and want to put that down real quick.
+
+## Optimizations
+We now have a heuristic to give us a decent score for any given pattern vs. any given string, and an algorithm to evaluate it. Now, can we make it faster?
+
+I can think of three optimizations - two of which are mutually exclusive (unless we're trying to match extremely long patterns), while one will compound equally with either of the two, by potentially recognizing non-matches more quickly.
+
+Starting with that last one, since the first row of the table (full pattern vs. empty string) is constant, and, in our heuristic at least, the only value that will change in the iterations before the first match is the first cell (representing the empty pattern vs. string prefix of length `j`, which is computed independently of the actual heuristic), we can skip evaluating all rows before the first match, by linearly scannnig the string. We can then also insert an early exit, if there are not enough characters left in the string to match the full pattern.
+
+The first of the two other optimizations relies on a similar realization that some cells don't need to be evaluated. Consider the following table:
+
+    j\i  0 1 2 3 4 5
+           p a t r n
+     0   1 0 0 0 0 0  // This row is constant
+            \|\|\|\|
+     1 p 1 x 0 0 0 0
+              \|\|\|
+     2 a 1 x x 0 0 0
+                \|\|
+     3 t 1 x x x 0 0
+                  \|
+     4 t 1 x x x x 0
+     5 e 1 x x x x x
+     6 r 1 x x x x x
+     7 n 1 x x x x x
+     8   1 x x x x x
+          \|\|\|\|\|
+     9 m _ x x x x x
+            \|\|\|\|
+    10 a _ _ x x x x
+              \|\|\|
+    11 t _ _ _ x x x
+                \|\|
+    12 c _ _ _ _ x x
+                  \|
+    13 h _ _ _ _ _ X
+
+The `\|` indicate data dependencies. Since the first row is constant, the triangle of `0` at the top right is constant as well, while the triangle of `_` at the bottom left does not affect `X`, the score of the match, at all. That means that we can shave off an additional `m^2` evaluations of our heuristic by reshaping the loop boundaries of the algorithm.
+
+The alternative is to use SIMD instructions to evaluate 16 cells of the table at a time, though this does require reshaping our heuristic again, to use bitwise operations and other math tricks to get rid of the conditional operations. I haven't tried doing that yet, but I feel like it should be possible.
+
+This concludes the topic of optimization for now, we'll come back to it once I actually implemented the heuristic and can profile all our options here.
 
 [1]: https://blog.forrestthewoods.com/reverse-engineering-sublime-text-s-fuzzy-match-4cffeed33fdb#.d05n81yjy
 [2]: https://www.reddit.com/r/programming/comments/4cfz8r/reverse_engineering_sublime_texts_fuzzy_match/d1i7unr/
