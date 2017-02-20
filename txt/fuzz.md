@@ -68,7 +68,73 @@ Now, remember that `match(i, j)` is supposed to be the score for the pair of _pr
 
     match(i, j) = match(i, j - 1) || (match(i - 1, j - 1) && A[i] == B[j])
 
-Since I haven't actually implemented any of this yet, this is where I take a break to do so, to check my reasoning. Temporarily storing a paragraph like this in the history of the article is one advantage of keeping the devblog in the same repository as the actual code! -- Turns out it works!
+***
+
+Since that is working fine, it is time to think about the precise constraints we'll want to express, so let's recap what we know from the sources I provided in the introduction:
+
+* Consecutively matched characters are better than individual matches. Ideally, one long sequence is better than multiple sequences, even if they sum to the same length.
+* Matches following a separator (` `, `_`, `-`, `.`, `/`, `\\`), as well as capital matches following a lower case letter, are better than matches in the middle of a word. How much more depends on how you want to weigh abbreviations against sequences.
+* The first match is worth more depending on how close it is to the start of the string. Other than this, unmatched characters do not incur a penalty (the first blog post says otherwise, but one commentor in the reddit discussion provides evidence that this is a bad idea).
+
+Since we won't be dealing with transpositions for now (see the next section for my reasoning for this), we should be able to come up with a scoring system to satisfy these constraints. 
+
+To get the first two, we first have to revisit the `match` function from the previous section, and make the `score` function, which will basically just give the pattern length if the string matches, and 0 otherwise. We'll also rephrase it a little bit to make the upcoming extensions easier to understand:
+
+    score(i, j) = if (score(i - 1, j - 1) && A[i] == B[j]) {
+        let x = 1
+        
+        max(score(i - 1, j - 1) + x, score(i, j - 1))
+    } else {
+        score(i, j - 1)
+    }
+
+Here, `x` is the value of the match. Our goal now is to find a value for `x`. We'll use named constants for now, and try to come up with reasonable values for them once we can see how they will interact:
+
+    let x = c + s + p
+
+Let's take this apart further:
+
+* `c` is the __consecutive match bonus__. This is actually the most tricky one of the three - if we want to satisfy what I called the _ideal_ property above, that is. Otherwise, we can just choose some constant to apply conditionally here.
+  
+  However, if we want one long sequence to be worth more than two that are half its length, we need to determine the sequence's length somehow. Obviously, we could scan back linearly to do this on the fly, incurring a potentially heavy performance cost. We could also fill a second table, keeping track of the match lengths, giving us free reign at the cost of additional memory. One idea I had, that turned out to be wrong, was to make this a multiplicative bonus, i.e. `let c = if (A[i - 1] == B[j - 1]) C * score(i - 1, j - 1) else 0`, where `C`is the __consecutive bonus coefficient__.
+  
+  I decided to make my life easier for now, and go with `let c = if (A[i - 1] != B[j - 1]) Ca else Cb`, i.e. the first match in a sequence is worth `Ca` points, all subsequent matches are worth `Cb` points.
+* `s`, the __separator bonus__, is probably the most obvious: `let s = if (is_separator(B[j - 1])) S else 0`, where `S` is the actual constant we care about. Extending the `is_separator` function to detect `camelCase` should be trivial.
+* `p` is the the __proximity bonus__, awarded only to the first match. You could awkwardly define this conditionally on `i`, but we'll just say that `score(0, j) = max(P - j, 1)`, where `P` is the __maximal proximity bonus__. I chose 1 as the second parameter because I want the empty pattern to match all strings. You can also imagine applying other functions to this term, e.g. if you want the bonus to fall of exponentially, rather than linearly.
+
+If you want to go straight to the tuning of the constants, skip the next two sections.
+
+***
+
+As the quote by the Sublime dev indicates, matching transpositions might be nice. However, there's `(m * (m - 1)) / 2` of those, `m` being the length of the pattern, increasing the running time from `O(m * n)` to `O(m^3 * n)`. It wouldn't even be that useful, as typos usually only switch adjacent letters. I assume this is what he actually meant, and there's only `m` such permutations, making this much more feasible.
+
+It might even be possible to account for this inside the scoring function; if that could be done in constant time, with no extra storage required, you're not exactly "sacrificing a little speed", as compared to any other constraint, though.
+
+__Side Note:__ I think I actually found a way to approximate this, though it requires reading `score(i - 2, j - 1)`, therefore needs a larger ring buffer, and will also match strings that are missing characters from the pattern entirely. Additionally, I haven't even tested it, much less proven it to work, which I don't consider worthwhile considering the drawbacks. Figuring this out is left as an exercise for the reader (as I don't feel confident in posting claims based on hunches like this).
+
+All in all, I think Sublime just iterates over all transpositions and runs the search with all of them, which is easily parallelized, and basically trivial compared to the actual search algorithm. Either that, linear searches inside the scoring function (which also matches his mention of sacrificing speed), or a different algorithm altogether.
+
+***
+
+Now, back to our scoring function -- it's time to tune the parameters! This might actually be an interesting machine learning problem, but I feel I'm deep enough in this rabbit hole already, so I'll leave this as another exercise for the reader.
+
+Let's focus on `Ca` and `Cb` first. Let's rephrase the 'ideal property' I posited earlier: `c_total(seq_len) > sum(map(k, c_total))`, where `c_total(seq_len) = Ca * (seq_len - 1) * Cb`, and `sum(k) == seq_len`. It seems obvious to me that `c_total(seq_len) - sum(map(k, c_total)) = (Cb - Ca) * len(k)`, though I haven't actually proven it. Given that, however, the 'ideal property' would hold as long as `Cb > Ca`.
+
+Next, we'll consider a simple case to determine constraints on `S`: given a pattern A of length `m`, and two strings B and C, both of which can match A in exactly one way; B containing A as a substring, and C containing `m` words, each starting with the respective character in A. What's the cutoff point `M`, where you would like one to overtake the other?
+
+    c_total(M) = Ca + (Cb * M) - Cb
+    s_total(M) = Ca * M + S * M
+    
+            c_total(M) = s_total(M)
+    Ca + (Cb * M) - Cb = Ca * M + S * M    | /M
+      Ca/M + Cb - Cb/M = Ca + S            | -Ca
+                     S = Ca/M - Ca + Cb - Cb/M
+                     S = Ca * (1/M - 1) + Cb * (1 - 1/M)
+                     S = (M - 1) / M * (Cb - Ca)
+
+I'd like to keep the average score as low as possible, to simplify a few things in the implementation, so I'll arbitrarily set `Ca = 1`, giving `Cb = M + 1` and `S = M - 1` (you could also set `Cb = z * M + 1, S = z * (M - 1)`, if you desired a larger `Cb - Ca` for some reason). With that, we defined one easy-to-grasp parameter to tune three of our constants with. That just leaves `P`.
+
+However, I'm tired, and will derive its optimal value in the next commit. Good night to anyone reading this!
 
 [1]: https://blog.forrestthewoods.com/reverse-engineering-sublime-text-s-fuzzy-match-4cffeed33fdb#.d05n81yjy
 [2]: https://www.reddit.com/r/programming/comments/4cfz8r/reverse_engineering_sublime_texts_fuzzy_match/d1i7unr/
