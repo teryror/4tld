@@ -232,7 +232,7 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
         selected_index_changed = false;
         search_key_changed = false;
         
-        if (in.abort) return {0};
+        if (in.abort) return -1;
         
         if (in.type == UserInputKey) {
             if (in.key.keycode == '\n') {
@@ -293,7 +293,7 @@ TLDFM_DIR_FILTER_SIG(tld_ignore_hidden_files) {
 #endif
 
 #ifndef TLDFM_FILE_LIST_CAPACITY
-#define TLDFM_FILE_LIST_CAPACITY 1024
+#define TLDFM_FILE_LIST_CAPACITY (16 * 1024)
 #endif
 
 #ifndef TLDFM_DIR_QUEUE_CAPACITY
@@ -392,8 +392,8 @@ __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String wo
     start_query_bar(app, &search_bar, 0);
     
     int32_t selected_file_index = tld_query_list_fuzzy(app, &search_bar, search_space);
-    String selected_file = search_space.values[selected_file_index];
-    if (selected_file.str) {
+    if (selected_file_index >= 0) {
+        String selected_file = search_space.values[selected_file_index];
         char full_path_space[1024];
         String full_path = make_fixed_width_string(full_path_space);
         copy_ss(&full_path, work_dir);
@@ -437,8 +437,8 @@ CUSTOM_COMMAND_SIG(tld_switch_buffer_fuzzy) {
     start_query_bar(app, &search_bar, 0);
     
     int32_t buffer_name_index = tld_query_list_fuzzy(app, &search_bar, search_space);
-    String buffer_name = search_space.values[buffer_name_index];
-    if (buffer_name.str) {
+    if (buffer_name_index >= 0) {
+        String buffer_name = search_space.values[buffer_name_index];
         View_Summary view = get_active_view(app, AccessAll);
         Buffer_Summary buffer = get_buffer_by_name(app, expand_str(buffer_name), AccessAll);
         view_set_buffer(app, &view, buffer.buffer_id, 0);
