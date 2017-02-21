@@ -84,7 +84,43 @@ I implement the new heuristic in this commit, but leave the explanation for now.
         score(i, j - 1)
     }
 
-Here, `x` is the 'value' of the match, `c` and `s` being bonuses for matching under certain conditions. If you read the article I linked in the introduction, you can probably guess what those conditions are, but to see how I calculate them, you'll have to read the code for now.
+Here, `x` is the 'value' of the match, `c` and `s` being bonuses for matching under certain conditions. If you read the article I linked in the introduction, you can probably guess what those conditions are; `s` is the __separator bonus__, awarded to matches following spaces, underscores, etc.
+
+    let s = if (is_separator(B[j - 1])) S else 0
+
+Where `S` is the actual weight we need to tune.
+
+`c` is the __consecutive match bonus__. In my old heuristic, this looked much the same (`let c = if (A[i - 1] == B[j - 1]) Cb else Ca`), which is what caused one of my problems: You can weight this such that, up to a given pattern length, abbreviations will always be preferred to consecutive matches, despite `S < Cb - Ca`, which is necessary to ensure that one long sequence will always score higher than multiple sequences. However, I did not take into account that sequences will often start after a separator, giving them both bonuses, making it impossible for abbreviations to score higher than sequences.
+
+Turns out you cannot have both while also keeping `Cb` constant. So I replaced it with
+
+    let c = num_of_consecutive_matches(i, j)
+
+You can implement that by nesting a third loop and counting the matches again, but I instead opted to fill an auxiliary table, which just needs a function of the familiar form:
+
+    num_of_consecutive_matches(i, j) = if (A[i] == B[j]) {
+        num_of_consecutive_matches(i - 1, j - 1) + 1
+    } else {
+        0
+    }
+
+This allows us to choose `S` rather freely, depending on the length of the longest abreviation we expect to see:
+
+| `m` | `score(seq) - S = (m + 1) * (m / 2)` | `min(S) = (score(seq) - S) / (m - 1)` |
+| ---:| ------------------------------------:| -------------------------------------:|
+|   2 |                                    3 |                                     3 |
+|   3 |                                    6 |                                     3 |
+|   4 |                                   10 |                                 3 1/3 |
+|   5 |                                   15 |                                 3 3/4 |
+|   6 |                                   21 |                                 4 1/2 |
+|   7 |                                   28 |                                 4 2/3 |
+|   8 |                                   36 |                                 5 1/7 |
+|   9 |                                   45 |                                 5 5/8 |
+|  10 |                                   55 |                                 6 1/9 |
+
+I feel like users entering a pure abbreviation longer than a couple characters seems unlikely, so we'll probably use `S = 4`.
+
+If you paid close attention, you'll note that my new heuristic does not take match position into account. This is because my old one did, and I found it to be the cause of many unintuitive results given my data set: relative paths to files, where the part you're most likely trying to match is at the end of the string. By not introducing bias towards the end either, we make a simpler rule, which generalizes better.
 
 ***
 
@@ -96,53 +132,43 @@ __Side Note:__ I think I actually found a way to approximate this, though it req
 
 All in all, I think Sublime just iterates over all transpositions and runs the search with all of them, which is easily parallelized, and basically trivial compared to the actual search algorithm. Either that, linear searches inside the scoring function (which also matches his mention of sacrificing speed), or a different algorithm altogether.
 
-***
-
 ## Optimizations
 So, how can we make this go faster?
 
-I can think of a number of optimizations - some of which are mutually exclusive (unless we're trying to match extremely long patterns), while some will compound equally with any of the others.
+My implementation already uses one optimization: given that the rows up to the rows of the score table up to the first match do not vary from the initial row at all, we can skip ahead in the string, potentially exiting early if there are not enough characters left to produce a full match.
 
-Starting with that last one, since the first row of the table (full pattern vs. empty string) is constant, and, in our heuristic at least, the only value that will change in the iterations before the first match is the first cell (representing the empty pattern vs. string prefix of length `j`, which is computed independently of the actual heuristic), we can skip evaluating all rows before the first match, by linearly scannnig the string. We can then also insert an early exit, if there are not enough characters left in the string to match the full pattern.
-
-The first of the two other optimizations relies on a similar realization that some cells don't need to be evaluated. Consider the following table:
+We can be even more clever and skip evaluation of a number of cells: Consider the following table:
 
     j\i  0 1 2 3 4 5
            p a t r n
      0   1 0 0 0 0 0  // This row is constant
-            \|\|\|\|
      1 p 1 x 0 0 0 0
-              \|\|\|
      2 a 1 x x 0 0 0
-                \|\|
      3 t 1 x x x 0 0
-                  \|
      4 t 1 x x x x 0
      5 e 1 x x x x x
      6 r 1 x x x x x
      7 n 1 x x x x x
      8   1 x x x x x
-          \|\|\|\|\|
      9 m _ x x x x x
-            \|\|\|\|
     10 a _ _ x x x x
-              \|\|\|
     11 t _ _ _ x x x
-                \|\|
     12 c _ _ _ _ x x
-                  \|
     13 h _ _ _ _ _ X
 
-The `\|` indicate data dependencies. Since the first row is constant, the triangle of `0` at the top right is constant as well, while the triangle of `_` at the bottom left does not affect `X`, the score of the match, at all. That means that we can shave off an additional `m^2` evaluations of our heuristic by reshaping the loop boundaries of the algorithm.
+Since the first row is constant, the triangle of `0` at the top right is constant as well, while the triangle of `_` at the bottom left does not affect `X`, the score of the match, at all. This is because, with our current heuristic, the value of a given cell only depends on the cell above it, and the cell the immediate left of _that_. That means that we can shave off an additional `m^2` evaluations of our heuristic by reshaping the loop boundaries of the algorithm.
 
-The alternative is to use SIMD instructions to evaluate 16 cells of the table at a time, though this does require reshaping our heuristic again, to use bitwise operations and other math tricks to get rid of the conditional operations. I haven't tried doing that yet, but I feel like it should be possible.
-We can also try repalcing the ringbuffer with a double buffer, which would allow us to take advantage of instruction level parallelism.
+There's more hardware-oriented optimizations to consider as well: We could try to rephrase our heuristic to use as few branches as possible, maybe even none at all. This would prevent pipeline flushes due to branch prediction going wrong.
 
-Whether we end up vectorizing or not, replacing some of the branching with math operations should prevent some pipeline flushes due to branch misprediction, so we should really consider doing this anyway.
+Doing so would also open up the path to using SIMD instructions, allowing evaluation of up to 16 cells at a time. While probably a really fun problem in itself, I doubt we're going to be doing this, since it imposes some quite heavy restrictions on the rest of the code, and even the score itself, which would probably have to fit in an unsigned byte value, which is cutting it really close, considering its maximum value is given as a quadratic equation.
 
-This concludes the topic of optimization for now, we'll come back to it once I actually implemented the heuristic and can profile all our options here.
+We're also most likely to just not need it: I'm linearly searching an array (which is admittedly pretty small, and filled in a cache-friendly way) on every keystroke, and there is no noticeable delay there.
+
+If your use case allows preprocessing, while also requiring the performance boost from indexing, you should look into [BK-Trees][5] and [Levenshtein Automata][6], one of which could probably be modified to support our custom heuristics. I haven't looked into that yet, as a list of filenames is extremely volatile, and is therefore rebuilt on demand in my code.
 
 [1]: https://blog.forrestthewoods.com/reverse-engineering-sublime-text-s-fuzzy-match-4cffeed33fdb#.d05n81yjy
 [2]: https://www.reddit.com/r/programming/comments/4cfz8r/reverse_engineering_sublime_texts_fuzzy_match/d1i7unr/
 [3]: https://en.wikipedia.org/wiki/Levenshtein_distance
 [4]: https://en.wikipedia.org/wiki/Wagner%E2%80%93Fischer_algorithm
+[5]: http://blog.notdot.net/2007/4/Damn-Cool-Algorithms-Part-1-BK-Trees
+[6]: http://blog.notdot.net/2010/07/Damn-Cool-Algorithms-Levenshtein-Automata

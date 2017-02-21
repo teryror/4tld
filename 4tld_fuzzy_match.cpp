@@ -94,7 +94,7 @@ tld_fuzzy_match_ss(String key, String val) {
                 if (j == 0 || (char_is_lower(val.str[j - 1]) && char_is_upper(val.str[j])) ||
                     tld_char_is_separator(val.str[j - 1]))
                 {   // Abbreviation bonus:
-                    value += 2;
+                    value += 4;
                 }
                 
                 row[i] = max(diag + value, row[i]);
