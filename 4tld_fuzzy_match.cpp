@@ -116,13 +116,13 @@ struct tld_StringList {
     int32_t count;
 };
 
-static String
+static int32_t
 tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringList list) {
-    String results[7];
+    int32_t result_indices[7];
     
     String empty = make_lit_string("");
-    Query_Bar result_bars[ArrayCount(results)] = {0};
-    for (int i = 0; i < ArrayCount(results); ++i) {
+    Query_Bar result_bars[ArrayCount(result_indices)] = {0};
+    for (int i = 0; i < ArrayCount(result_indices); ++i) {
         result_bars[i].string = empty;
         result_bars[i].prompt = empty;
     }
@@ -145,15 +145,15 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
             int32_t min_score = 0x7FFFFFFF;
             int32_t min_index = -1;
             
-            int32_t result_scores[ArrayCount(results)];
+            int32_t result_scores[ArrayCount(result_indices)];
             
             for (int i = 0; i < list.count; ++i) {
                 String candidate = list.values[i];
                 
                 int32_t score = tld_fuzzy_match_ss(search_bar->string, candidate);
                 
-                if (score > 0 && result_count < ArrayCount(results)) {
-                    results[result_count] = candidate;
+                if (score > 0 && result_count < ArrayCount(result_indices)) {
+                    result_indices[result_count] = i;
                     result_scores[result_count] = score;
                     
                     if (score > min_score)
@@ -165,13 +165,13 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                     ++result_count;
                 } else if (score > min_score)
                 {
-                    results[min_index] = candidate;
+                    result_indices[min_index] = i;
                     result_scores[min_index] = score;
                     
                     min_index = 0;
                     min_score = result_scores[0];
                     
-                    for (int j = 1; j <= ArrayCount(results); ++j) {
+                    for (int j = 1; j <= ArrayCount(result_indices); ++j) {
                         if (result_scores[j] < min_score) {
                             min_score = result_scores[j];
                             min_index = j;
@@ -184,9 +184,9 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                 for (int j = i + 1; j < result_count; ++j) {
                     if (result_scores[i] < result_scores[j])
                     {
-                        String s = results[i];
-                        results[i] = results[j];
-                        results[j] = s;
+                        int32_t s  = result_indices[i];
+                        result_indices[i] = result_indices[j];
+                        result_indices[j] = s;
                         
                         int32_t c = result_scores[i];
                         result_scores[i] = result_scores[j];
@@ -196,7 +196,7 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
             }
             
             for (int i = result_count - 1; i >= 0; --i) {
-                result_bars[i].string = results[i];
+                result_bars[i].string = list.values[result_indices[i]];
                 start_query_bar(app, &result_bars[i], 0);
             }
             start_query_bar(app, search_bar, 0);
@@ -205,11 +205,11 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
         if (selected_index_changed || search_key_changed) {
             for (int i = 0; i < result_count; ++i) {
                 if (i == result_selected_index) {
-                    result_bars[i].prompt = results[i];
+                    result_bars[i].prompt = list.values[result_indices[i]];
                     result_bars[i].string = empty;
                 } else {
                     result_bars[i].prompt = empty;
-                    result_bars[i].string = results[i];
+                    result_bars[i].string = list.values[result_indices[i]];
                 }
             }
         }
@@ -225,7 +225,7 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                 if (result_count > 0) {
                     if (result_selected_index < 0)
                         result_selected_index = 0;
-                    return results[result_selected_index];
+                    return result_indices[result_selected_index];
                 }
             } else if (in.key.keycode == key_back) {
                 if (search_bar->string.size > 0) {
@@ -377,7 +377,8 @@ __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String wo
     search_bar.string = make_fixed_width_string(search_bar_space);
     start_query_bar(app, &search_bar, 0);
     
-    String selected_file = tld_query_list_fuzzy(app, &search_bar, search_space);
+    int32_t selected_file_index = tld_query_list_fuzzy(app, &search_bar, search_space);
+    String selected_file = search_space.values[selected_file_index];
     if (selected_file.str) {
         char full_path_space[1024];
         String full_path = make_fixed_width_string(full_path_space);
@@ -421,7 +422,8 @@ CUSTOM_COMMAND_SIG(tld_switch_buffer_fuzzy) {
     search_bar.string = make_fixed_width_string(search_bar_space);
     start_query_bar(app, &search_bar, 0);
     
-    String buffer_name = tld_query_list_fuzzy(app, &search_bar, search_space);
+    int32_t buffer_name_index = tld_query_list_fuzzy(app, &search_bar, search_space);
+    String buffer_name = search_space.values[buffer_name_index];
     if (buffer_name.str) {
         View_Summary view = get_active_view(app, AccessAll);
         Buffer_Summary buffer = get_buffer_by_name(app, expand_str(buffer_name), AccessAll);
