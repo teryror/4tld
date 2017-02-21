@@ -151,6 +151,20 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                 String candidate = list.values[i];
                 
                 int32_t score = tld_fuzzy_match_ss(search_bar->string, candidate);
+                for (int j = 1; j < search_bar->string.size; ++j) {
+                    char temp = search_bar->string.str[j - 1];
+                    search_bar->string.str[j - 1] = search_bar->string.str[j];
+                    search_bar->string.str[j] = temp;
+                    
+                    int32_t score_transpose = tld_fuzzy_match_ss(search_bar->string, candidate) / 2;
+                    
+                    search_bar->string.str[j] = search_bar->string.str[j - 1];
+                    search_bar->string.str[j - 1] = temp;
+                    
+                    if (score < score_transpose) {
+                        score = score_transpose;
+                    }
+                }
                 
                 if (score > 0 && result_count < ArrayCount(result_indices)) {
                     result_indices[result_count] = i;
