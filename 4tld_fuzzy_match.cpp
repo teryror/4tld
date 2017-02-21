@@ -74,40 +74,35 @@ tld_fuzzy_match_ss(String key, String val) {
         return 0;
     }
     
-    int32_t row[TLDFM_MAX_QUERY_SIZE] = {0};
-    
-    int32_t proximity_bonus_max;
-    if (key.size < 4) {
-        proximity_bonus_max = 2 * key.size;
-    } else {
-        proximity_bonus_max = 3 * key.size;
-    }
-    proximity_bonus_max /= 4;
+    int32_t row[TLDFM_MAX_QUERY_SIZE] = {0}; // Current row of scores table
+    int32_t lml[TLDFM_MAX_QUERY_SIZE] = {0}; // Current row of auxiliary table (match lengths)
     
     for (; j < val.size; ++j) {
-        int32_t diag = proximity_bonus_max * (val.size - j) / val.size + 1;
+        int32_t diag = 1;
+        int32_t diag_l = 0;
         
         for (int i = 0; i < key.size; ++i) {
             int32_t row_old = row[i];
+            int32_t lml_old = lml[i];
+            
+            lml[i] = tld_fuzzy_match_char(key.str[i], val.str[j]) * (diag_l + 1);
             
             if (diag > 0 && tld_fuzzy_match_char(key.str[i], val.str[j])) {
-                int32_t value = 1;
+                // Sequential match bonus:
+                int32_t value = lml[i];
                 
                 if (j == 0 || (char_is_lower(val.str[j - 1]) && char_is_upper(val.str[j])) ||
                     tld_char_is_separator(val.str[j - 1]))
                 {   // Abbreviation bonus:
-                    value += 3;
-                }
-                
-                if (i > 0 && j > 0 && tld_fuzzy_match_char(key.str[i - 1], val.str[j - 1]))
-                {   // Sequential match bonus:
-                    value += 4;
+                    value += 2;
                 }
                 
                 row[i] = max(diag + value, row[i]);
             }
             
+            
             diag = row_old;
+            diag_l = lml_old;
         }
     }
     
@@ -161,13 +156,15 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                     results[result_count] = candidate;
                     result_scores[result_count] = score;
                     
-                    if (score < min_score) {
+                    if (score > min_score)
+                    {
                         min_score = score;
                         min_index = result_count;
                     }
                     
                     ++result_count;
-                } else if (score > min_score) {
+                } else if (score > min_score)
+                {
                     results[min_index] = candidate;
                     result_scores[min_index] = score;
                     
@@ -185,7 +182,8 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
             
             for (int i = 0; i < result_count - 1; ++i) {
                 for (int j = i + 1; j < result_count; ++j) {
-                    if (result_scores[i] < result_scores[j]) {
+                    if (result_scores[i] < result_scores[j])
+                    {
                         String s = results[i];
                         results[i] = results[j];
                         results[j] = s;

@@ -70,39 +70,21 @@ Now, remember that `match(i, j)` is supposed to be the score for the pair of _pr
 
 ***
 
-Since that is working fine, it is time to think about the precise constraints we'll want to express, so let's recap what we know from the sources I provided in the introduction:
+Since that is working fine, it is time to think about the precise constraints we'll want to express. In the first iteration of this chapter, I showed the skeleton of a heuristic that I thought would work, and derived the optimal values for all the weights, given some additional constraints.
 
-* Consecutively matched characters are better than individual matches. Ideally, one long sequence is better than multiple sequences, even if they sum to the same length.
-* Matches following a separator (` `, `_`, `-`, `.`, `/`, `\\`), as well as capital matches following a lower case letter, are better than matches in the middle of a word. How much more depends on how you want to weigh abbreviations against sequences.
-* The first match is worth more depending on how close it is to the start of the string. Other than this, unmatched characters do not incur a penalty (the first blog post says otherwise, but one commentor in the reddit discussion provides evidence that this is a bad idea).
+The problem here was that I defined one of the constraints in a naive fashion, so it did not actually represent the properties I wanted to express. This time around, I started by defining constraints again, except I derived the constraints from actual examples, rather than informal definitions of the rules.
 
-Since we won't be dealing with transpositions for now (see the next section for my reasoning for this), we should be able to come up with a scoring system to satisfy these constraints. 
-
-To get the first two, we first have to revisit the `match` function from the previous section, and make the `score` function, which will basically just give the pattern length if the string matches, and 0 otherwise. We'll also rephrase it a little bit to make the upcoming extensions easier to understand:
+I implement the new heuristic in this commit, but leave the explanation for now. Here it is in the abstract:
 
     score(i, j) = if (score(i - 1, j - 1) && A[i] == B[j]) {
-        let x = 1
+        let x = c + s
         
         max(score(i - 1, j - 1) + x, score(i, j - 1))
     } else {
         score(i, j - 1)
     }
 
-Here, `x` is the value of the match. Our goal now is to find a value for `x`. We'll use named constants for now, and try to come up with reasonable values for them once we can see how they will interact:
-
-    let x = c + s + p
-
-Let's take this apart further:
-
-* `c` is the __consecutive match bonus__. This is actually the most tricky one of the three - if we want to satisfy what I called the _ideal_ property above, that is. Otherwise, we can just choose some constant to apply conditionally here.
-  
-  However, if we want one long sequence to be worth more than two that are half its length, we need to determine the sequence's length somehow. Obviously, we could scan back linearly to do this on the fly, incurring a potentially heavy performance cost. We could also fill a second table, keeping track of the match lengths, giving us free reign at the cost of additional memory. One idea I had, that turned out to be wrong, was to make this a multiplicative bonus, i.e. `let c = if (A[i - 1] == B[j - 1]) C * score(i - 1, j - 1) else 0`, where `C`is the __consecutive bonus coefficient__.
-  
-  I decided to make my life easier for now, and go with `let c = if (A[i - 1] != B[j - 1]) Ca else Cb`, i.e. the first match in a sequence is worth `Ca` points, all subsequent matches are worth `Cb` points.
-* `s`, the __separator bonus__, is probably the most obvious: `let s = if (is_separator(B[j - 1])) S else 0`, where `S` is the actual constant we care about. Extending the `is_separator` function to detect `camelCase` should be trivial.
-* `p` is the the __proximity bonus__, awarded only to the first match. You could awkwardly define this conditionally on `i`, but we'll just say that `score(0, j) = max(P - j, 1)`, where `P` is the __maximal proximity bonus__. I chose 1 as the second parameter because I want the empty pattern to match all strings. You can also imagine applying other functions to this term, e.g. if you want the bonus to fall off exponentially, rather than linearly.
-
-If you want to go straight to the tuning of the constants, skip the next section.
+Here, `x` is the 'value' of the match, `c` and `s` being bonuses for matching under certain conditions. If you read the article I linked in the introduction, you can probably guess what those conditions are, but to see how I calculate them, you'll have to read the code for now.
 
 ***
 
@@ -115,63 +97,6 @@ __Side Note:__ I think I actually found a way to approximate this, though it req
 All in all, I think Sublime just iterates over all transpositions and runs the search with all of them, which is easily parallelized, and basically trivial compared to the actual search algorithm. Either that, linear searches inside the scoring function (which also matches his mention of sacrificing speed), or a different algorithm altogether.
 
 ***
-
-Now, back to our scoring function -- it's time to tune the parameters! This might actually be an interesting machine learning problem, but I feel I'm deep enough in this rabbit hole already, so I'll leave this as another exercise for the reader.
-
-Let's focus on `Ca` and `Cb` first. Let's rephrase the 'ideal property' I posited earlier: `c_total(seq_len) > sum(map(k, c_total))`, where `c_total(seq_len) = Ca + (seq_len - 1) * Cb`, and `sum(k) == seq_len`. It seems obvious to me that `c_total(seq_len) - sum(map(k, c_total)) = (Cb - Ca) * len(k)`, though I haven't actually proven it. Given that, however, the 'ideal property' would hold as long as `Cb > Ca`.
-
-Next, we'll consider a simple case to determine constraints on `S`: given a pattern A of length `m`, and two strings B and C, both of which can match A in exactly one way; B containing A as a substring, and C containing `m` words, each starting with the respective character in A. What's the cutoff point `M`, where you would like one to overtake the other?
-
-    c_total(M) = Ca + (Cb * M) - Cb
-    s_total(M) = Ca * M + S * M
-    
-            c_total(M) = s_total(M)
-    Ca + (Cb * M) - Cb = Ca * M + S * M    | /M
-      Ca/M + Cb - Cb/M = Ca + S            | -Ca
-                     S = Ca/M - Ca + Cb - Cb/M
-                     S = Ca * (1/M - 1) + Cb * (1 - 1/M)
-                     S = (M - 1) / M * (Cb - Ca)
-
-This gives us an easily understood parameter to be tuned to taste - `M = 4` seems like a good initial choice to test with; I'll arbitrarily set `Ca = 1`. Since `M` determines the _ratio_ of `S` to `Cb - Ca`, this gives `S = M*z - z` and `Cb = M*z + 1`. We'll tune `z` after tuning `P`.
-
-I essentially think of `P` as a tie-breaker mechanism, to give priority to strings that match the pattern earlier. However, as a side effect, it also allows that matche that would have scored lower to take priority if they appear much earlier in the string. To mitigate this effect, let's consider the range of possible values of `score` for a pattern of length `m`:
-
-The worst possible match does not get any bonuses, meaning its score will just be `min_score(m) = Ca * m`, while the best match will get a score of `max_score(m) = if (m < M) { S * m } else { S + Ca + Cb * (m - 1) }`. This gives
-
-    range(m) = if (m < M) {
-        S * m - Ca * m
-    } else {
-        S + Ca + Cb * (m - 1) - Ca * m
-    }
-
-If we set `P >= range(m)`, there will be cases where a string with the worst possible match will rank higher than the best possible match. I don't think that should _ever_ happen, as the worst possible match will be non-sequentially matching characters in the middle of words, which probably is not the user's intent. Therefore, we should let `P = Q * range(m)`, making `Q` a sliding scale from _don't consider match location at all_ to _allow worst-case matches to score higher than best-case matches_. I doubt you would ever want `Q > 0.5`, but the extreme case at `Q = 0` does not sound desirable either, so I think `Q = 0.25` would be a good value to start with.
-
-Furthermore, because we let `score(0, j) = max(P - j, 1)`, after `P` unmatched characters, the tie-breaking mechanism fails. Let's take `n`, the length of the string, into account: `score(0, j) = 1 + P * (n - j) / n`.
-
-That only leaves `z`, which does not actually affect how matches will be ranked against each other -- so why not just let `z = 1`? Because I lied: `z` affects the maximum score, but not the minimum, allowing us to control the range of possible scores. We'll want a large range, to keep the chance of ties low, so we should choose the largest `z` that will not overflow the integer type we're using to store the scores. If we do want to get this close to our storage system's maximum value, we need to know the maximum pattern length `m_max` as well, to get
-
-    max_score(m_max) = 1 + Q * range(m_max) + S + Ca + Cb * (m_max - 1)
-
-Given all the definitions, we can trivially substitute and solve for `z`. As it turns out, at `m_max = 64, M = 4, Q = 0.25`, you can get away with storing scores in unsigned eight bit values, though `z = 1`, giving poor dynamic range (though this should be obvious, given the maximum value). For comparison: you can fit scores with `z = 171` into 16-bit integers at `m_max = 64, M = 4, Q = 0.5`.
-
-***
-
-And with that, we finally have the full heuristic:
-
-    score(0, j) = 1 + P * (n - j) / n
-    score(i, j) = if (score(i - 1, j - 1) && A[i] == B[j]) {
-        let s = if (is_separator(B[j - 1])) S else 0
-        let c = if (A[i - 1] != B[j - 1]) Ca else Cb
-        let x = s + c
-        
-        max(score(i - 1, j - 1) + x, score(i, j - 1))
-    } else {
-        score(i, j - 1)
-    }
-
-Even with a naive transcription into the Wagner-Fischer algorithm, this is imperceptebly fast when searching a file list of 1000+ elements; I can type in a patter with no noticeable input lag.
-
-Searching a list of a thousand elements is laughable, though. Computers are seriously fast. I doubt 4tld will ever need anything faster than this implementation, but I can think of both some low hanging fruit and more involved optimizations, with larger impact on our code.
 
 ## Optimizations
 So, how can we make this go faster?
