@@ -690,6 +690,8 @@ DefineModalKey(modal_question_mark, tld_interactive_find_and_replace_new);
 HOOK_SIG(global_settings) {
     init_memory(app);
     
+    tld_push_default_command_names();
+    
     change_theme(app, literal("stb"));
     change_font(app, literal("Inconsolata"), true);
     Theme_Color colors[] = {
@@ -806,6 +808,7 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, 'q', MDFR_ALT, cmdid_kill_buffer);
     bind(context, 'r', MDFR_ALT, replace_range);
     bind(context, 's', MDFR_ALT, smart_save);
+    bind(context, 't', MDFR_ALT, tld_execute_arbitrary_command_fuzzy);
     bind(context, 'v', MDFR_ALT, paste);
     bind(context, 'w', MDFR_ALT, close_panel);
     bind(context, 'x', MDFR_ALT, cut);

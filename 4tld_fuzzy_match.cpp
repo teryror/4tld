@@ -483,4 +483,77 @@ CUSTOM_COMMAND_SIG(tld_switch_buffer_fuzzy) {
     }
 }
 
+typedef Custom_Command_Function *Custom_Command_Function_Pointer;
+static  tld_StringList tld_command_names = {0};
+static  Custom_Command_Function_Pointer *tld_command_functions = 0;
+
+CUSTOM_COMMAND_SIG(tld_execute_arbitrary_command_fuzzy) {
+    if (tld_command_functions == 0) return;
+    
+    char search_bar_space[TLDFM_MAX_QUERY_SIZE];
+    Query_Bar search_bar;
+    search_bar.prompt = make_lit_string("Command: ");
+    search_bar.string = make_fixed_width_string(search_bar_space);
+    
+    start_query_bar(app, &search_bar, 0);
+    int32_t command_index = tld_query_list_fuzzy(app, &search_bar, tld_command_names);
+    end_query_bar(app, &search_bar, 0);
+    
+    if (command_index >= 0) {
+        exec_command(app, tld_command_functions[command_index]);
+    }
+}
+
+static inline bool32
+tld_push_named_command(Custom_Command_Function *cmd, String cmd_name) {
+    if (tld_command_names.items == 0) {
+        tld_command_names.items = (tld_String *)malloc(sizeof(tld_String) * 1024);
+    }
+    
+    if (tld_command_functions == 0) {
+        tld_command_functions = (Custom_Command_Function_Pointer *)malloc(sizeof(Custom_Command_Function_Pointer) * 1024);
+    }
+    
+    if (tld_command_names.count < 1024) {
+        tld_command_names.items[tld_command_names.count] = {0};
+        tld_command_names.items[tld_command_names.count].value = cmd_name;
+        
+        tld_command_functions[tld_command_names.count] = cmd;
+        
+        ++tld_command_names.count;
+        return true;
+    }
+    
+    return false;
+}
+
+static inline void
+tld_push_default_command_names() {
+    tld_push_named_command(exit_4coder, make_lit_string("System: exit 4coder"));
+    tld_push_named_command(toggle_mouse, make_lit_string("System: toggle mouse suppression"));
+    
+    tld_push_named_command(to_uppercase, make_lit_string("Fancy Editing: range to uppercase"));
+    tld_push_named_command(to_lowercase, make_lit_string("Fancy Editing: range to lowercase"));
+    tld_push_named_command(if0_off, make_lit_string("Fancy Editing: surround with if 0"));
+    tld_push_named_command(auto_tab_range, make_lit_string("Fancy Editing: autotab range"));
+    tld_push_named_command(auto_tab_whole_file,
+                           make_lit_string("Fancy Editing: autotab whole file"));
+    
+    tld_push_named_command(show_scrollbar, make_lit_string("View: show scrollbar"));
+    tld_push_named_command(hide_scrollbar, make_lit_string("View: hide scrollbar"));
+    tld_push_named_command(open_panel_vsplit, make_lit_string("View: split vertically"));
+    tld_push_named_command(open_panel_hsplit, make_lit_string("View: split horizontally"));
+    tld_push_named_command(close_panel, make_lit_string("View: close"));
+    
+    tld_push_named_command(eol_nixify, make_lit_string("Buffer: nixify line endings"));
+    tld_push_named_command(eol_dosify, make_lit_string("Buffer: dosify line endings"));
+    tld_push_named_command(toggle_line_wrap, make_lit_string("Buffer: toggle line wrap"));
+    tld_push_named_command(toggle_virtual_whitespace,
+                           make_lit_string("Buffer: toggle virtual whitespace"));
+    
+    tld_push_named_command(open_file_in_quotes, make_lit_string("Files: Open filename in quotes"));
+    tld_push_named_command(open_matching_file_cpp,
+                           make_lit_string("Files: Open matching cpp/h file"));
+}
+
 #endif
