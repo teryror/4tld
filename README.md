@@ -25,11 +25,11 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   setup -- see the actual implementation of the default commands for reference.
   If you first include 4tld\_project\_management.cpp with the default commands,
   the project's working directory is used as the home directory for the terminal.
-* **4tld\_fuzzy\_match.cpp** is a WIP copy of the fuzzy file search many know
-  and love from Sublime and TextMate. Right now, it has a generic, though
-  extremely dumb string matching function, utilities for constructing a
-  list of all files in a directories and its subdirectories, and a functioning
-  custom command utilizing them.
+* **4tld\_fuzzy\_match.cpp** is a copy of the fuzzy file search many know
+  and love from Sublime Text. Right now, it has a generic, and somewhat optimized
+  string matching function, a funcion for querying it, which can relatively large
+  large datasets, and custom commands to open files and execute arbitrary
+  commands with this setup.
 * **4tld\_user\_interface.h** is intended for utility functions pertaining to
   view management, scroll rules, query bars and other miscellaneous UI features.
   Note that all the drop-in command packs depend on this file.
@@ -42,10 +42,9 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   [here](https://gist.github.com/cmuratori/8c909975de4bb071056b4ec1651077e8).
 
 ## Planned customizations
-* I used to have a custom command that would ask for a command name, lookup the
-  corresponding command in an array, and execute it. I also had small program to
-  accompany it, generating the array at compile time, with no extra work required.
-  I would love to bring that back in a more robust fashion.
+* The existing find and replace command was my first one to implement this style
+  of query bar abuse, so naturally it does the worst job of it. I'd like to give
+  the UI here a bit of an overhaul.
 * The existing `git_quick_save` command is pretty useful, and I would like to do
   more to make version control invisible.
 * Finally, I've been putting off a clean-up pass since about version 4.0.5, when
