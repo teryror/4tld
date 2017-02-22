@@ -3,6 +3,7 @@ File: 4tld_fuzzy_match.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or imlied; use this code at your own risk.
 ******************************************************************************/
+#include "windows.h"
 
 #define TLDFM_DIR_FILTER_SIG(name) static bool name(char *filename, int32_t filename_len)
 
@@ -57,6 +58,9 @@ tld_fuzzy_match_char(char a, char b) {
 #ifndef max
 #define max(a, b) ((a > b) ? a : b)
 #endif
+#ifndef min
+#define min(a, b) ((a < b) ? a : b)
+#endif
 
 static int32_t
 tld_fuzzy_match_ss(String key, String val) {
@@ -77,11 +81,17 @@ tld_fuzzy_match_ss(String key, String val) {
     int32_t row[TLDFM_MAX_QUERY_SIZE] = {0}; // Current row of scores table
     int32_t lml[TLDFM_MAX_QUERY_SIZE] = {0}; // Current row of auxiliary table (match lengths)
     
+    int j_lo = j;
+    
     for (; j < val.size; ++j) {
         int32_t diag = 1;
         int32_t diag_l = 0;
         
-        for (int i = 0; i < key.size; ++i) {
+        // Optimization 2: Skip triangular table sections that don't affect the result
+        int i_lo = max(key.size - (val.size - j), 0);
+        int i_hi = min((j - j_lo + 1), key.size);
+        
+        for (int i = i_lo; i < i_hi; ++i) {
             int32_t row_old = row[i];
             int32_t lml_old = lml[i];
             
@@ -147,9 +157,15 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
             
             int32_t result_scores[ArrayCount(result_indices)];
             
+            double elapsedTime = 0;
             for (int i = 0; i < list.count; ++i) {
                 String candidate = list.values[i];
                 
+                LARGE_INTEGER frequency;
+                LARGE_INTEGER t1, t2;
+                
+                QueryPerformanceFrequency(&frequency);
+                QueryPerformanceCounter(&t1);
                 int32_t score = tld_fuzzy_match_ss(search_bar->string, candidate);
                 for (int j = 1; j < search_bar->string.size; ++j) {
                     char temp = search_bar->string.str[j - 1];
@@ -165,6 +181,8 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                         score = score_transpose;
                     }
                 }
+                QueryPerformanceCounter(&t2);
+                elapsedTime += (t2.QuadPart - t1.QuadPart) * 1000.0 / frequency.QuadPart;
                 
                 if (score > 0 && result_count < ArrayCount(result_indices)) {
                     result_indices[result_count] = i;
@@ -213,6 +231,9 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                 result_bars[i].string = list.values[result_indices[i]];
                 start_query_bar(app, &result_bars[i], 0);
             }
+            
+            float_to_str(&search_bar->prompt, (float)elapsedTime);
+            append_s_char(&search_bar->prompt, ' ');
             start_query_bar(app, search_bar, 0);
         }
         
@@ -387,7 +408,9 @@ __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String wo
     
     Query_Bar search_bar;
     char search_bar_space[TLDFM_MAX_QUERY_SIZE];
-    search_bar.prompt = make_lit_string("Find File: ");
+    //search_bar.prompt = make_lit_string("Find File: ");
+    char search_bar_space_[20];
+    search_bar.prompt = make_fixed_width_string(search_bar_space_);
     search_bar.string = make_fixed_width_string(search_bar_space);
     start_query_bar(app, &search_bar, 0);
     
@@ -432,7 +455,8 @@ CUSTOM_COMMAND_SIG(tld_switch_buffer_fuzzy) {
     
     Query_Bar search_bar;
     char search_bar_space[TLDFM_MAX_QUERY_SIZE];
-    search_bar.prompt = make_lit_string("Switch Bufer: ");
+    char search_bar_space_[20];
+    search_bar.prompt = make_fixed_width_string(search_bar_space_); // make_lit_string("Switch Bufer: ");
     search_bar.string = make_fixed_width_string(search_bar_space);
     start_query_bar(app, &search_bar, 0);
     

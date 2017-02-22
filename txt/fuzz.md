@@ -156,13 +156,13 @@ We can be even more clever and skip evaluation of a number of cells: Consider th
     12 c _ _ _ _ x x
     13 h _ _ _ _ _ X
 
-Since the first row is constant, the triangle of `0` at the top right is constant as well, while the triangle of `_` at the bottom left does not affect `X`, the score of the match, at all. This is because, with our current heuristic, the value of a given cell only depends on the cell above it, and the cell the immediate left of _that_. That means that we can shave off an additional `m^2` evaluations of our heuristic by reshaping the loop boundaries of the algorithm.
+Since the first row is constant, the triangle of `0` at the top right is constant as well, while the triangle of `_` at the bottom left does not affect `X`, the score of the match, at all. This is because, with our current heuristic, the value of a given cell only depends on the cell above it, and the cell the immediate left of _that_. That means that we can shave off an additional `m^2` evaluations of our heuristic by reshaping the loop boundaries of the algorithm. (__Note:__ this is the first one I actually measured. I didn't do any rigorous, statistical analysis, but it gave an estimated speedup of about 50%).
+
+Even more specific to our application, we can exploit the fact that we are building up the search pattern incrementally; appending a character to the pattern will never turn a non-match into a match, so we can reduce the number of strings we attempt to match as pattern length increases. We can provide results for pattern prefixes (i.e. support instant backspace) by storing them. I will try this option last, as it does not apply to applications outside of the fuzzy list panels, and would require a significant change to my query code.
 
 There's more hardware-oriented optimizations to consider as well: We could try to rephrase our heuristic to use as few branches as possible, maybe even none at all. This would prevent pipeline flushes due to branch prediction going wrong.
 
 Doing so would also open up the path to using SIMD instructions, allowing evaluation of up to 16 cells at a time. While probably a really fun problem in itself, I doubt we're going to be doing this, since it imposes some quite heavy restrictions on the rest of the code, and even the score itself, which would probably have to fit in an unsigned byte value, which is cutting it really close, considering its maximum value is given as a quadratic equation.
-
-We're also most likely to just not need it: I'm linearly searching an array (which is admittedly pretty small, and filled in a cache-friendly way) on every keystroke, and there is no noticeable delay there.
 
 If your use case allows preprocessing, while also requiring the performance boost from indexing, you should look into [BK-Trees][5] and [Levenshtein Automata][6], one of which could probably be modified to support our custom heuristics. I haven't looked into that yet, as a list of filenames is extremely volatile, and is therefore rebuilt on demand in my code.
 
