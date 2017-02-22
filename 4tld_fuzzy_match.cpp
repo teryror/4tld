@@ -127,8 +127,13 @@ tld_fuzzy_match_ss(String key, String val) {
 
 #endif
 
+struct tld_String {
+    String value;
+    uint64_t bit_stack;
+};
+
 struct tld_StringList {
-    String *values;
+    tld_String *items;
     int32_t count;
 };
 
@@ -145,6 +150,8 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
     
     int result_count = 0;
     int result_selected_index = 0;
+    bool full_rescan = true;
+    uint64_t current_mask = 1;
     bool search_key_changed = true;
     bool selected_index_changed = true;
     
@@ -163,56 +170,55 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
             
             int32_t result_scores[ArrayCount(result_indices)];
             
-            double elapsedTime = 0;
             for (int i = 0; i < list.count; ++i) {
-                String candidate = list.values[i];
+                String candidate = list.items[i].value;
                 
-                LARGE_INTEGER frequency;
-                LARGE_INTEGER t1, t2;
-                
-                QueryPerformanceFrequency(&frequency);
-                QueryPerformanceCounter(&t1);
-                int32_t score = tld_fuzzy_match_ss(search_bar->string, candidate);
-                for (int j = 1; j < search_bar->string.size; ++j) {
-                    char temp = search_bar->string.str[j - 1];
-                    search_bar->string.str[j - 1] = search_bar->string.str[j];
-                    search_bar->string.str[j] = temp;
-                    
-                    int32_t score_transpose = tld_fuzzy_match_ss(search_bar->string, candidate) / 4;
-                    
-                    search_bar->string.str[j] = search_bar->string.str[j - 1];
-                    search_bar->string.str[j - 1] = temp;
-                    
-                    if (score < score_transpose) {
-                        score = score_transpose;
-                    }
-                }
-                QueryPerformanceCounter(&t2);
-                elapsedTime += (t2.QuadPart - t1.QuadPart) * 1000.0 / frequency.QuadPart;
-                
-                if (score > 0 && result_count < ArrayCount(result_indices)) {
-                    result_indices[result_count] = i;
-                    result_scores[result_count] = score;
-                    
-                    if (score > min_score)
-                    {
-                        min_score = score;
-                        min_index = result_count;
+                if (full_rescan || list.items[i].bit_stack & current_mask) {
+                    int32_t score = tld_fuzzy_match_ss(search_bar->string, candidate);
+                    for (int j = 1; j < search_bar->string.size; ++j) {
+                        char temp = search_bar->string.str[j - 1];
+                        search_bar->string.str[j - 1] = search_bar->string.str[j];
+                        search_bar->string.str[j] = temp;
+                        
+                        int32_t score_transpose = tld_fuzzy_match_ss(search_bar->string, candidate) / 4;
+                        
+                        search_bar->string.str[j] = search_bar->string.str[j - 1];
+                        search_bar->string.str[j - 1] = temp;
+                        
+                        if (score < score_transpose) {
+                            score = score_transpose;
+                        }
                     }
                     
-                    ++result_count;
-                } else if (score > min_score)
-                {
-                    result_indices[min_index] = i;
-                    result_scores[min_index] = score;
-                    
-                    min_index = 0;
-                    min_score = result_scores[0];
-                    
-                    for (int j = 1; j <= ArrayCount(result_indices); ++j) {
-                        if (result_scores[j] < min_score) {
-                            min_score = result_scores[j];
-                            min_index = j;
+                    if (score <= 0) {
+                        list.items[i].bit_stack &= ~(1ULL << search_bar->string.size);
+                    } else {
+                        list.items[i].bit_stack |= 1ULL << search_bar->string.size;
+                        
+                        if (result_count < ArrayCount(result_indices)) {
+                            result_indices[result_count] = i;
+                            result_scores[result_count] = score;
+                            
+                            if (score > min_score)
+                            {
+                                min_score = score;
+                                min_index = result_count;
+                            }
+                            
+                            ++result_count;
+                        } else {
+                            result_indices[min_index] = i;
+                            result_scores[min_index] = score;
+                            
+                            min_index = 0;
+                            min_score = result_scores[0];
+                            
+                            for (int j = 1; j <= ArrayCount(result_indices); ++j) {
+                                if (result_scores[j] < min_score) {
+                                    min_score = result_scores[j];
+                                    min_index = j;
+                                }
+                            }
                         }
                     }
                 }
@@ -234,23 +240,21 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
             }
             
             for (int i = result_count - 1; i >= 0; --i) {
-                result_bars[i].string = list.values[result_indices[i]];
+                result_bars[i].string = list.items[result_indices[i]].value;
                 start_query_bar(app, &result_bars[i], 0);
             }
             
-            float_to_str(&search_bar->prompt, (float)elapsedTime);
-            append_s_char(&search_bar->prompt, ' ');
             start_query_bar(app, search_bar, 0);
         }
         
         if (selected_index_changed || search_key_changed) {
             for (int i = 0; i < result_count; ++i) {
                 if (i == result_selected_index) {
-                    result_bars[i].prompt = list.values[result_indices[i]];
+                    result_bars[i].prompt = list.items[result_indices[i]].value;
                     result_bars[i].string = empty;
                 } else {
                     result_bars[i].prompt = empty;
-                    result_bars[i].string = list.values[result_indices[i]];
+                    result_bars[i].string = list.items[result_indices[i]].value;
                 }
             }
         }
@@ -258,6 +262,7 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
         User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
         selected_index_changed = false;
         search_key_changed = false;
+        full_rescan = false;
         
         if (in.abort) return -1;
         
@@ -273,6 +278,7 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                     --search_bar->string.size;
                     search_key_changed = true;
                 }
+                current_mask = 1ULL << search_bar->string.size;
             } else if (in.key.keycode == key_del) {
                 search_bar->string.size = 0;
                 result_selected_index = 0;
@@ -280,6 +286,9 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                 for (int i = result_count - 1; i >= 0; --i) {
                     end_query_bar(app, &result_bars[i], 0);
                 }
+                
+                full_rescan = true;
+                current_mask = 1;
             } else if (in.key.keycode == key_up) {
                 selected_index_changed = true;
                 
@@ -297,6 +306,8 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
             } else if (key_is_unmodified(&in.key) && in.key.character != 0) {
                 append_s_char(&search_bar->string, in.key.character);
                 search_key_changed = true;
+                
+                current_mask = 1ULL << (search_bar->string.size - 1);
             }
         }
     }
@@ -334,7 +345,7 @@ tld_fuzzy_construct_filename_list(Application_Links *app,
                                   bool (*dir_filter)(char *, int32_t))
 {
     tld_StringList result = {0};
-    result.values = push_array(memory, String, TLDFM_FILE_LIST_CAPACITY);
+    result.items = push_array(memory, tld_String, TLDFM_FILE_LIST_CAPACITY);
     
     File_List dir_queue_infos[TLDFM_DIR_QUEUE_CAPACITY];
     String    dir_queue_names[TLDFM_DIR_QUEUE_CAPACITY];
@@ -388,10 +399,10 @@ tld_fuzzy_construct_filename_list(Application_Links *app,
                 int32_t filename_size = dir_name.size + info_i.filename_len;
                 char *filename_space = (char *)partition_allocate(memory, filename_size);
                 if (filename_space) {
-                    result.values[result.count].str = filename_space;
-                    result.values[result.count].memory_size = filename_size;
-                    copy_ss(&result.values[result.count], dir_name);
-                    append_ss(&result.values[result.count],
+                    result.items[result.count].value.str = filename_space;
+                    result.items[result.count].value.memory_size = filename_size;
+                    copy_ss(&result.items[result.count].value, dir_name);
+                    append_ss(&result.items[result.count].value,
                               make_string(info_i.filename, info_i.filename_len));
                     
                     result.count += 1;
@@ -414,15 +425,13 @@ __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String wo
     
     Query_Bar search_bar;
     char search_bar_space[TLDFM_MAX_QUERY_SIZE];
-    //search_bar.prompt = make_lit_string("Find File: ");
-    char search_bar_space_[20];
-    search_bar.prompt = make_fixed_width_string(search_bar_space_);
+    search_bar.prompt = make_lit_string("Find File: ");
     search_bar.string = make_fixed_width_string(search_bar_space);
     start_query_bar(app, &search_bar, 0);
     
     int32_t selected_file_index = tld_query_list_fuzzy(app, &search_bar, search_space);
     if (selected_file_index >= 0) {
-        String selected_file = search_space.values[selected_file_index];
+        String selected_file = search_space.items[selected_file_index].value;
         char full_path_space[1024];
         String full_path = make_fixed_width_string(full_path_space);
         copy_ss(&full_path, work_dir);
@@ -445,30 +454,29 @@ CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
 }
 
 CUSTOM_COMMAND_SIG(tld_switch_buffer_fuzzy) {
-    String list_space[128];
+    tld_String list_space[128];
     tld_StringList search_space = {0};
-    search_space.values = list_space;
+    search_space.items = list_space;
     
     for (Buffer_Summary buffer = get_buffer_first(app, AccessAll);
          buffer.exists && search_space.count < 128;
          get_buffer_next(app, &buffer, AccessAll))
     {
         String buffer_name = make_string(buffer.buffer_name, buffer.buffer_name_len);
-        search_space.values[search_space.count] = buffer_name;
+        search_space.items[search_space.count].value = buffer_name;
         
         ++search_space.count;
     }
     
     Query_Bar search_bar;
     char search_bar_space[TLDFM_MAX_QUERY_SIZE];
-    char search_bar_space_[20];
-    search_bar.prompt = make_fixed_width_string(search_bar_space_); // make_lit_string("Switch Bufer: ");
+    search_bar.prompt = make_lit_string("Switch Bufer: ");
     search_bar.string = make_fixed_width_string(search_bar_space);
     start_query_bar(app, &search_bar, 0);
     
     int32_t buffer_name_index = tld_query_list_fuzzy(app, &search_bar, search_space);
     if (buffer_name_index >= 0) {
-        String buffer_name = search_space.values[buffer_name_index];
+        String buffer_name = search_space.items[buffer_name_index].value;
         View_Summary view = get_active_view(app, AccessAll);
         Buffer_Summary buffer = get_buffer_by_name(app, expand_str(buffer_name), AccessAll);
         view_set_buffer(app, &view, buffer.buffer_id, 0);
