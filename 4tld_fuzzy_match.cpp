@@ -41,13 +41,13 @@ tld_fuzzy_match_ss(String key, String val) {
 }
 #else
 
-static inline bool
+static inline b32_4tech
 tld_char_is_separator(char a) {
     return (a == ' ' || a == '_' || a == '-' ||
             a == '.' || a == '/' || a == '\\');
 }
 
-static inline bool
+static inline b32_4tech
 tld_fuzzy_match_char(char a, char b) {
     return ((char_to_lower(a) == char_to_lower(b)) ||
             (char_is_upper(a) && a == b) ||
@@ -88,16 +88,22 @@ tld_fuzzy_match_ss(String key, String val) {
         int32_t diag_l = 0;
         
         // Optimization 2: Skip triangular table sections that don't affect the result
-        int i_lo = max(key.size - (val.size - j), 0);
-        int i_hi = min((j - j_lo + 1), key.size);
+        int i_lo = max(j + key.size - val.size, 0);
+        int i_hi = min(j - j_lo + 1, key.size);
+        
+        if (i_lo > 0) {
+            diag = row[i_lo - 1];
+            diag_l = lml[i_lo - 1];
+        }
         
         for (int i = i_lo; i < i_hi; ++i) {
             int32_t row_old = row[i];
             int32_t lml_old = lml[i];
             
-            lml[i] = tld_fuzzy_match_char(key.str[i], val.str[j]) * (diag_l + 1);
+            int32_t match = tld_fuzzy_match_char(key.str[i], val.str[j]);
+            lml[i] = match * (diag_l + 1);
             
-            if (diag > 0 && tld_fuzzy_match_char(key.str[i], val.str[j])) {
+            if (diag > 0 && match) {
                 // Sequential match bonus:
                 int32_t value = lml[i];
                 
@@ -172,7 +178,7 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                     search_bar->string.str[j - 1] = search_bar->string.str[j];
                     search_bar->string.str[j] = temp;
                     
-                    int32_t score_transpose = tld_fuzzy_match_ss(search_bar->string, candidate) / 2;
+                    int32_t score_transpose = tld_fuzzy_match_ss(search_bar->string, candidate) / 4;
                     
                     search_bar->string.str[j] = search_bar->string.str[j - 1];
                     search_bar->string.str[j - 1] = temp;
