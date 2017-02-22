@@ -504,6 +504,17 @@ CUSTOM_COMMAND_SIG(tld_execute_arbitrary_command_fuzzy) {
     }
 }
 
+CUSTOM_COMMAND_SIG(tld_list_named_commands) {
+    Buffer_Summary buffer;
+    tld_display_buffer_by_name(app, make_lit_string("*help*"), &buffer, 0, 0, AccessAll);
+    buffer_replace_range(app, &buffer, 0, buffer.size, 0, 0);
+    
+    for (int i = 0; i < tld_command_names.count; ++i) {
+        buffer_replace_range(app, &buffer, buffer.size, buffer.size, expand_str(tld_command_names.items[i].value));
+        buffer_replace_range(app, &buffer, buffer.size, buffer.size, literal("\n"));
+    }
+}
+
 static inline bool32
 tld_push_named_command(Custom_Command_Function *cmd, String cmd_name) {
     if (tld_command_names.items == 0) {
@@ -531,6 +542,7 @@ static inline void
 tld_push_default_command_names() {
     tld_push_named_command(exit_4coder, make_lit_string("System: exit 4coder"));
     tld_push_named_command(toggle_mouse, make_lit_string("System: toggle mouse suppression"));
+    tld_push_named_command(tld_list_named_commands, make_lit_string("System: list named commands"));
     
     tld_push_named_command(to_uppercase, make_lit_string("Fancy Editing: range to uppercase"));
     tld_push_named_command(to_lowercase, make_lit_string("Fancy Editing: range to lowercase"));
@@ -545,15 +557,16 @@ tld_push_default_command_names() {
     tld_push_named_command(open_panel_hsplit, make_lit_string("View: split horizontally"));
     tld_push_named_command(close_panel, make_lit_string("View: close"));
     
+    tld_push_named_command(kill_buffer, make_lit_string("Buffer: close"));
     tld_push_named_command(eol_nixify, make_lit_string("Buffer: nixify line endings"));
     tld_push_named_command(eol_dosify, make_lit_string("Buffer: dosify line endings"));
     tld_push_named_command(toggle_line_wrap, make_lit_string("Buffer: toggle line wrap"));
     tld_push_named_command(toggle_virtual_whitespace,
                            make_lit_string("Buffer: toggle virtual whitespace"));
     
-    tld_push_named_command(open_file_in_quotes, make_lit_string("Files: Open filename in quotes"));
+    tld_push_named_command(open_file_in_quotes, make_lit_string("Files: open filename in quotes"));
     tld_push_named_command(open_matching_file_cpp,
-                           make_lit_string("Files: Open matching cpp/h file"));
+                           make_lit_string("Files: open matching cpp/h file"));
 }
 
 #endif
