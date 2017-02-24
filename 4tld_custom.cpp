@@ -19,9 +19,10 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 #define TLDIT_IMPLEMENT_COMMANDS
 #include "4tld_interactive_terminal.cpp"
 
-#define TLD_COLORS_WHITE 0xE0E0E0
-#define TLD_COLORS_GRAY  0x909090
-#define TLD_COLORS_BLACK 0x181818
+#define TLD_COLORS_WHITE     0xE0E0E0
+#define TLD_COLORS_GRAY      0x909090
+#define TLD_COLORS_DARK_GRAY 0x303030
+#define TLD_COLORS_BLACK     0x181818
 
 #define TLD_COLORS_YELLOW 0xE7C547
 #define TLD_COLORS_BLUE   0x71DDFF
@@ -700,8 +701,8 @@ HOOK_SIG(global_settings) {
         {Stag_Back,              TLD_COLORS_BLACK},
         {Stag_Pop1,              TLD_COLORS_BLUE},
         {Stag_Pop2,              TLD_COLORS_GREEN},
-        {Stag_Margin,            TLD_COLORS_BLACK},
-        {Stag_Margin_Hover,      TLD_COLORS_BLACK},
+        {Stag_Margin,            TLD_COLORS_DARK_GRAY},
+        {Stag_Margin_Hover,      TLD_COLORS_DARK_GRAY},
         {Stag_At_Cursor,         TLD_COLORS_BLACK},
         {Stag_Comment,           TLD_COLORS_YELLOW},
         {Stag_Keyword,           TLD_COLORS_WHITE},
