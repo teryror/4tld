@@ -206,7 +206,7 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
                             }
                             
                             ++result_count;
-                        } else {
+                        } else if (score > result_scores[min_index]) {
                             result_indices[min_index] = i;
                             result_scores[min_index] = score;
                             
