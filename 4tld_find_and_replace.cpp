@@ -310,24 +310,27 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
     buffer_replace_range(app, &search_buffer, 0, search_buffer.size, 0, 0);
     
     Query_Bar find_bar = {0};
-    find_bar.prompt = make_lit_string("f:    Find What: ");
+    find_bar.prompt = make_lit_string("[M-f]    Find What: ");
     find_bar.string = tld_search_state.find_what;
     
     Query_Bar replace_bar = {0};
-    replace_bar.prompt = make_lit_string("r: Replace With: ");
+    replace_bar.prompt = make_lit_string("[M-r] Replace With: ");
     replace_bar.string = tld_search_state.replace_with;
     
     String enabled = make_lit_string("[X]");
     String disabled = make_lit_string("[ ]");
     
     Query_Bar case_bar = {0};
-    case_bar.prompt = make_lit_string("c: Case Sensitive: "); // TODO
+    case_bar.prompt = make_lit_string("[c] Case Sensitive: ");
     case_bar.string = tld_search_state.case_sensitive ? enabled : disabled;
     
+    Query_Bar hint_bar = {0};
+    hint_bar.prompt = make_lit_string("i/j: find prev./next match -- r: replace -- R: replace all -- a: list all matches -- A: search all buffers");
+    
+    start_query_bar(app, &hint_bar, 0);
     start_query_bar(app, &case_bar, 0);
     start_query_bar(app, &replace_bar, 0);
     start_query_bar(app, &find_bar, 0);
-    set_active_view(app, &target_view);
     
     int mode;
     if (tld_search_state.find_what.size) {
@@ -394,17 +397,50 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                 }
             } break;
             case 2: {
-                if (in.key.keycode == '\n') {
-                    goto_next_match = true;
+                if (in.key.keycode == 'f') {
+                    if (key_is_unmodified(&in.key)) {
+                        goto_next_match = true;
+                    } else if (in.key.modifiers[MDFR_ALT]) {
+                        set_active_view(app, &search_view);
+                        mode = 0;
+                    }
                 } else if (in.key.keycode == 'c') {
                     tld_search_state.case_sensitive = !tld_search_state.case_sensitive;
                     case_bar.string = tld_search_state.case_sensitive ? enabled : disabled;
-                } else if (in.key.keycode == 'f') {
-                    set_active_view(app, &search_view);
-                    mode = 0;
                 } else if (in.key.keycode == 'r') {
-                    set_active_view(app, &search_view);
-                    mode = 1;
+                    if (key_is_unmodified(&in.key)) {
+                        if (target_buffer.lock_flags & AccessProtected) {
+                            break;
+                        }
+                        
+                        if (match.max - match.min > 0) {
+                            buffer_replace_range(app, &target_buffer, match.min, match.max, expand_str(replace_bar.string));
+                            goto_next_match = true;
+                        }
+                    } else if (in.key.modifiers[MDFR_ALT]) {
+                        set_active_view(app, &search_view);
+                        mode = 1;
+                    }
+                } else if (in.key.keycode == 'R') {
+                    if (target_buffer.lock_flags & AccessProtected) {
+                        break;
+                    }
+                    
+                    new_pos = 0;
+                    while (new_pos < target_buffer.size) {
+                        if (tld_search_state.case_sensitive) {
+                            buffer_seek_string_forward(app, &target_buffer, new_pos, 0, expand_str(find_bar.string), &new_pos);
+                        } else {
+                            buffer_seek_string_insensitive_forward(app, &target_buffer, new_pos, 0, expand_str(find_bar.string), &new_pos);
+                        }
+                        
+                        if (new_pos < target_buffer.size) {
+                            buffer_replace_range(app, &target_buffer, new_pos, new_pos + replace_bar.string.size, expand_str(replace_bar.string));
+                        }
+                    }
+                    
+                    match.min = 0;
+                    match.max = 0;
                 } else if (in.key.keycode == 'i') {
                     tld_search_state.backwards = true;
                     goto_next_match = true;
@@ -423,10 +459,21 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                     tld_search_state.replace_with = replace_bar.string;
                     tld_search_state.case_sensitive = false;
                     tld_search_state.backwards = false;
+                    set_active_view(app, &search_view);
+                    
+                    end_query_bar(app, &hint_bar, 0);
+                    end_query_bar(app, &case_bar, 0);
+                    end_query_bar(app, &replace_bar, 0);
+                    end_query_bar(app, &find_bar, 0);
+                    
+                    int32_t flags = SearchFlag_MatchWholeWord;
+                    if (!tld_search_state.case_sensitive) {
+                        flags |= SearchFlag_CaseInsensitive;
+                    }
+                    generic_search_all_buffers(app, &global_general, &global_part,
+                                               find_bar.string, flags);
+                    
                     view_set_highlight(app, &target_view, 0, 0, false);
-                    
-                    // TODO: List all matches
-                    
                     close_view(app, &target_view);
                     return;
                 } else if (in.key.keycode == 'A') {
@@ -473,7 +520,7 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                     if (new_pos < 0) {
                         match.min = 0;
                         match.max = 0;
-                        break;
+                        goto retire_iteration;
                     }
                 }
                 
@@ -502,7 +549,7 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                     if (new_pos >= target_buffer.size) {
                         match.min = 0;
                         match.max = 0;
-                        break;
+                        goto retire_iteration;
                     }
                 }
                 
@@ -510,8 +557,11 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                 match.max = match.min + find_bar.string.size;
             }
             
+            retire_iteration:
+            
             if (match.max - match.min > 0) {
                 view_set_highlight(app, &target_view, match.min, match.max, true);
+                exec_command(app, center_view);
             } else {
                 view_set_highlight(app, &target_view, 0, 0, false);
             }
