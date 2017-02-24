@@ -277,3 +277,160 @@ CUSTOM_COMMAND_SIG(tld_interactive_find_and_replace_selection) {
 }
 
 #endif
+
+struct tld_Search {
+    String find_what;
+    String replace_with;
+    bool backwards;
+    bool case_insensitive;
+};
+
+static char tld_search_find_space[512];
+static char tld_search_replace_space[512];
+static tld_Search tld_search_state = {0};
+
+CUSTOM_COMMAND_SIG(tld_find_and_replace) {
+    if (tld_search_state.find_what.str == 0 ||
+        tld_search_state.replace_with.str == 0)
+    {
+        tld_search_state.find_what = make_fixed_width_string(tld_search_find_space);
+        tld_search_state.replace_with = make_fixed_width_string(tld_search_replace_space);
+    }
+    
+    View_Summary target_view = get_active_view(app, AccessAll);
+    Buffer_Summary target_buffer = get_buffer(app, target_view.buffer_id, AccessAll);
+    
+    View_Summary search_view = open_view(app, &target_view, ViewSplit_Top);
+    view_set_split_proportion(app, &search_view, 0.15f);
+    view_set_setting(app, &search_view, ViewSetting_ShowScrollbar, 0);
+    
+    Buffer_Summary search_buffer;
+    tld_display_buffer_by_name(app, make_lit_string("*search*"),
+                               &search_buffer, &search_view, 0, AccessAll);
+    buffer_replace_range(app, &search_buffer, 0, search_buffer.size, 0, 0);
+    
+    Query_Bar find_bar = {0};
+    find_bar.prompt = make_lit_string("f:    Find What: ");
+    find_bar.string = tld_search_state.find_what;
+    
+    Query_Bar replace_bar = {0};
+    replace_bar.prompt = make_lit_string("r: Replace With: ");
+    replace_bar.string = tld_search_state.replace_with;
+    
+    Query_Bar hints_bar = {0};
+    hints_bar.prompt = make_lit_string("This is where hints go later..."); // TODO
+    
+    start_query_bar(app, &hints_bar, 0);
+    start_query_bar(app, &replace_bar, 0);
+    start_query_bar(app, &find_bar, 0);
+    
+    int mode;
+    if (tld_search_state.find_what.size) {
+        mode = 2;
+    } else {
+        mode = 0;
+    }
+    
+    bool goto_next_match = false;
+    
+    User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+    while (true) {
+        if (in.abort) {
+            tld_search_state.find_what.size = 0;
+            tld_search_state.replace_with.size = 0;
+            
+            close_view(app, &search_view);
+            return;
+        } else if (in.type != UserInputKey) {
+            in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+            continue;
+        }
+        
+        switch (mode) {
+            case 0: {
+                if (in.key.keycode == '\t') {
+                    mode = 1;
+                } else if (in.key.keycode == '\n') {
+                    mode = 2;
+                    goto_next_match = true;
+                } else if (in.key.keycode == key_back) {
+                    if (find_bar.string.size) {
+                        find_bar.string.size -= 1;
+                    }
+                } else if (in.key.keycode == key_del) {
+                    find_bar.string.size = 0;
+                } else if (key_is_unmodified(&in.key) && in.key.character) {
+                    append_s_char(&find_bar.string, in.key.character);
+                }
+            } break;
+            case 1: {
+                if (in.key.keycode == '\t') {
+                    mode = 0;
+                } else if (in.key.keycode == '\n') {
+                    mode = 2;
+                    goto_next_match = true;;
+                } else if (in.key.keycode == key_back) {
+                    if (replace_bar.string.size) {
+                        replace_bar.string.size -= 1;
+                    }
+                } else if (in.key.keycode == key_del) {
+                    replace_bar.string.size = 0;
+                } else if (key_is_unmodified(&in.key) && in.key.character) {
+                    append_s_char(&replace_bar.string, in.key.character);
+                }
+            } break;
+            case 2: {
+                if (in.key.keycode == '\n') {
+                    // TODO: Replace
+                    goto_next_match = true;
+                } else if (in.key.keycode == 'c') {
+                    tld_search_state.case_insensitive = !tld_search_state.case_insensitive;
+                } else if (in.key.keycode == 'f') {
+                    mode = 0;
+                } else if (in.key.keycode == 'r') {
+                    mode = 1;
+                } else if (in.key.keycode == 'i') {
+                    tld_search_state.backwards = true;
+                    goto_next_match = true;
+                } else if (in.key.keycode == 'k') {
+                    tld_search_state.backwards = false;
+                    goto_next_match = true;
+                } else if (in.key.keycode == ' ') {
+                    tld_search_state.find_what = find_bar.string;
+                    tld_search_state.replace_with = replace_bar.string;
+                    
+                    close_view(app, &search_view);
+                    return;
+                } else if (in.key.keycode == 'a') {
+                    tld_search_state.find_what = find_bar.string;
+                    tld_search_state.replace_with = replace_bar.string;
+                    
+                    // TODO: List all matches
+                    
+                    close_view(app, &target_view);
+                    return;
+                } else if (in.key.keycode == 'A') {
+                    tld_search_state.find_what = find_bar.string;
+                    tld_search_state.replace_with = replace_bar.string;
+                    
+                    // TODO: Search all buffers
+                    
+                    close_view(app, &target_view);
+                    return;
+                }
+            } break;
+            default: {
+                // NOTE: Unreachable
+                Assert(false);
+            }
+        }
+        
+        if (goto_next_match) {
+            goto_next_match = false;
+            
+            // TODO
+        }
+        
+        in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+    }
+}
