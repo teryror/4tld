@@ -2,281 +2,8 @@
 File: 4tld_find_and_replace.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or imlied; use this code at your own risk.
-*******************************************************************************
-TODO(Polish): This is pretty nice, but there are some minor problems with it,
-that may get annoying after a while, and should be fixed before packaging and
-sharing this code:
-- I would like the ability to paste into the query bar from the clipboard.
-  Should be easy to implement within tld_requery_user_string, but I would like
-  all query bars to behave the same, so maybe I should look into helping Allen
-  rewrite the existing code there, so that everyone can benefit from it, and I
-  don't have to be careful in replacing it after every update.
-- I would like to be able to search for special characters, but
-  tld_requery_user_string does not allow entering them. We can already copy
-  them with interactive_find_and_replace_selection, but the query_bar doesn't
-  render them right anyway. Having a (visible!) cursor would also be great.
-- We're potentially leaving optimizations on the table by not utilizing the
-  existing functionality in 4coder_search.cpp -- this isn't documented very
-  well, and it seems to be working fine as is, but I should look into that
-  before sharing the code.
-- Some more nice-to-have features:
-  - toggle case sensitivity (consider: emacs style, where search-keys
-    containing capitals are case sensitive, others are not)
-  - regular expressions, or at least some kind of placeholders
-    If RegEx, consider a smart replace that can utilize info from the match to
-    generate a replacement from another regex (there's probably some cool CS
-    theory stuff for that)
-  - others?
 ******************************************************************************/
 #include "4tld_user_interface.h"
-
-void
-tld_interactive_find_and_replace(Application_Links *app,
-                                 Query_Bar *find_bar,
-                                 Query_Bar *replace_bar,
-                                 View_Summary *view,
-                                 bool show_hints)
-{
-    int32_t query_bar_count = 3;
-    
-    if (show_hints) {
-        query_bar_count += 2;
-        
-        Query_Bar hints2;
-        hints2.prompt = make_lit_string("F: Find previous -- R: Replace all -- A: search All buffers");
-        hints2.string = make_lit_string("");
-        start_query_bar(app, &hints2, 0);
-        
-        Query_Bar hints1;
-        hints1.prompt = make_lit_string("f: Find next     -- r: Replace");
-        hints1.string = make_lit_string("");
-        start_query_bar(app, &hints1, 0);
-    }
-    
-    replace_bar->prompt = make_lit_string("[M-r] Replace with: ");
-    start_query_bar(app, replace_bar, 0);
-    
-    find_bar->prompt = make_lit_string("[M-f] Find what: ");
-    start_query_bar(app, find_bar, 0);
-    
-    Buffer_Summary buffer = get_buffer(app, view->buffer_id, AccessAll);
-    if (!buffer.exists) return;
-    
-    // TODO(On Update): This is done to make the text in the first couple lines visible
-    // If something to this effect ever makes it into default 4coder, remove this hack!
-    for (int i = 0; i < query_bar_count; ++i) {
-        buffer_replace_range(app, &buffer, 0, 0, literal("\n"));
-    }
-    
-    if (find_bar->string.size == 0) {
-        tld_requery_user_string(app, find_bar);
-    }
-    
-    Range match = make_range(0, 0);
-    
-    int pos = view->cursor.pos;
-    bool search_backwards = false;
-    int new_pos;
-    
-    User_Input in;
-    while (true) {
-        in = get_user_input(app, EventOnAnyKey, EventOnButton);
-        if (in.abort || in.key.keycode == key_esc || in.key.keycode == 0) {
-            goto end_search;
-        }
-        if (find_bar->string.size == 0 &&
-            in.key.keycode != 'f' &&
-            in.key.modifiers[MDFR_ALT_INDEX] == 0)
-        {
-            continue;
-        }
-        
-        switch (in.key.keycode) {
-            case 'f': next_match: {
-                if (in.key.modifiers[MDFR_ALT_INDEX]) {
-                    find_bar->string.size = 0;
-                    tld_requery_user_string(app, find_bar);
-                    continue;
-                } else {
-                    search_backwards = false;
-                    if (match.max - match.min > 0) {
-                        pos = match.max + 1;
-                        if (pos >= buffer.size) {
-                            pos = query_bar_count;
-                        }
-                    }
-                    
-                    buffer_seek_string_forward(app, &buffer, pos, 0, find_bar->string.str, find_bar->string.size, &new_pos);
-                    if (new_pos >= buffer.size) {
-                        buffer_seek_string_forward(app, &buffer, query_bar_count, 0, find_bar->string.str, find_bar->string.size, &new_pos);
-                        
-                        if (new_pos >= buffer.size) {
-                            match.min = 0;
-                            match.max = 0;
-                            break;
-                        }
-                    }
-                    
-                    match.min = new_pos;
-                    match.max = match.min + find_bar->string.size;
-                }
-            } break;
-            case 'F': previous_match: {
-                search_backwards = true;
-                if (match.max - match.min > 0) {
-                    pos = match.min - 1;
-                    if (pos < query_bar_count) {
-                        pos = buffer.size;
-                    }
-                }
-                
-                buffer_seek_string_backward(app, &buffer, pos, query_bar_count, find_bar->string.str, find_bar->string.size, &new_pos);
-                if (new_pos < query_bar_count) {
-                    buffer_seek_string_backward(app, &buffer, buffer.size - find_bar->string.size, query_bar_count, find_bar->string.str, find_bar->string.size, &new_pos);
-                    if (new_pos < query_bar_count) {
-                        match.min = 0;
-                        match.max = 0;
-                        break;
-                    }
-                }
-                
-                match.min = new_pos;
-                match.max = match.min + find_bar->string.size;
-            } break;
-            case 'r': {
-                if (buffer.lock_flags & AccessProtected) {
-                    continue;
-                }
-                
-                if (in.key.modifiers[MDFR_ALT_INDEX]) {
-                    replace_bar->string.size = 0;
-                    tld_requery_user_string(app, replace_bar);
-                    continue;
-                } else if (match.max - match.min > 0) {
-                    buffer_replace_range(app, &buffer, match.min, match.max, replace_bar->string.str, replace_bar->string.size);
-                    buffer = get_buffer(app, view->buffer_id, AccessAll);
-                    
-                    if (search_backwards) {
-                        goto previous_match;
-                    } else {
-                        goto next_match;
-                    }
-                }
-            } break;
-            case 'R': {
-                if (buffer.lock_flags & AccessProtected) {
-                    continue;
-                }
-                
-                new_pos = query_bar_count;
-                while (new_pos < buffer.size) {
-                    buffer_seek_string_forward(app, &buffer, new_pos, 0, find_bar->string.str, find_bar->string.size, &new_pos);
-                    if (new_pos < buffer.size) {
-                        buffer_replace_range(app, &buffer, new_pos, new_pos + replace_bar->string.size, replace_bar->string.str, replace_bar->string.size);
-                        buffer = get_buffer(app, view->buffer_id, AccessAll);
-                    }
-                }
-                
-                match.min = 0;
-                match.max = 0;
-            } break;
-            case 'A': {
-                generic_search_all_buffers(app, &global_general, &global_part, find_bar->string,
-                                           SearchFlag_MatchWholeWord);
-                goto end_search;
-            } break;
-        }
-        
-        if (match.max - match.min > 0) {
-            view_set_highlight(app, view, match.min, match.max, true);
-            exec_command(app, center_view);
-        } else {
-            view_set_highlight(app, view, 0, 0, false);
-        }
-    }
-    
-    end_search: {
-        view_set_highlight(app, view, 0, 0, false);
-        if (match.max - match.min > 0) {
-            view_set_mark(app, view, seek_pos(match.min));
-            view_set_cursor(app, view, seek_pos(match.max), false);
-        }
-        
-        buffer_replace_range(app, &buffer, 0, query_bar_count, literal(""));
-    }
-}
-
-#ifdef TLDFR_IMPLEMENT_COMMMANDS
-#undef TLDFR_IMPLEMENT_COMMMANDS
-
-char tld_find_bar_space[512];
-char tld_replace_bar_space[512];
-
-CUSTOM_COMMAND_SIG(tld_interactive_find_and_replace_new) {
-    View_Summary view = get_active_view(app, AccessAll);
-    
-    Query_Bar find_bar;
-    find_bar.string = make_fixed_width_string(tld_find_bar_space);
-    
-    Query_Bar replace_bar;
-    replace_bar.string = make_fixed_width_string(tld_replace_bar_space);
-    
-    tld_interactive_find_and_replace(app, &find_bar, &replace_bar, &view, true);
-}
-
-CUSTOM_COMMAND_SIG(tld_interactive_find_and_replace_continued) {
-    View_Summary view = get_active_view(app, AccessAll);
-    
-    Query_Bar find_bar;
-    find_bar.string = make_string_slowly(tld_find_bar_space);
-    find_bar.string.memory_size = sizeof(tld_find_bar_space);
-    
-    Query_Bar replace_bar;
-    replace_bar.string = make_string_slowly(tld_replace_bar_space);
-    replace_bar.string.memory_size = sizeof(tld_replace_bar_space);
-    
-    tld_interactive_find_and_replace(app, &find_bar, &replace_bar, &view, true);
-}
-
-CUSTOM_COMMAND_SIG(tld_interactive_find_and_replace_selection) {
-    View_Summary view = get_active_view(app, AccessAll);
-    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessAll);
-    
-    Query_Bar find_bar;
-    find_bar.string.str = tld_find_bar_space;
-    
-    Query_Bar replace_bar;
-    replace_bar.string = make_string_slowly(tld_replace_bar_space);
-    replace_bar.string.memory_size = sizeof(tld_replace_bar_space);
-    
-    int cursor_pos = view.cursor.pos;
-    int mark_pos = view.mark.pos;
-    
-    Range selection = make_range(0, 0);
-    
-    if (cursor_pos < mark_pos) {
-        selection.min = cursor_pos;
-        selection.max = mark_pos;
-    } else if (cursor_pos > mark_pos) {
-        selection.min = mark_pos;
-        selection.max = cursor_pos;
-    }
-    
-    if (selection.min == selection.max ||
-        selection.max - selection.min >= sizeof(tld_find_bar_space) - 1)
-    {
-        find_bar.string = make_string_slowly(tld_find_bar_space);
-    } else {
-        buffer_read_range(app, &buffer, selection.min, selection.max, tld_find_bar_space);
-        find_bar.string.size = selection.max - selection.min;
-        terminate_with_null(&find_bar.string);
-    }
-    
-    find_bar.string.memory_size = sizeof(tld_find_bar_space);
-    tld_interactive_find_and_replace(app, &find_bar, &replace_bar, &view, true);
-}
-
-#endif
 
 struct tld_Search {
     String find_what;
@@ -285,44 +12,42 @@ struct tld_Search {
     bool case_sensitive;
 };
 
-static char tld_search_find_space[512];
-static char tld_search_replace_space[512];
-static tld_Search tld_search_state = {0};
-
-CUSTOM_COMMAND_SIG(tld_find_and_replace) {
-    if (tld_search_state.find_what.str == 0 ||
-        tld_search_state.replace_with.str == 0)
-    {
-        tld_search_state.find_what = make_fixed_width_string(tld_search_find_space);
-        tld_search_state.replace_with = make_fixed_width_string(tld_search_replace_space);
-    }
-    
+static void
+tld_find_and_replace_interactive(Application_Links *app, tld_Search *search_state, int32_t min, int32_t max) {
     View_Summary target_view = get_active_view(app, AccessAll);
     Buffer_Summary target_buffer = get_buffer(app, target_view.buffer_id, AccessAll);
+    
+    if (min > max) {
+        int32_t tmp = min;
+        min = max;
+        max = tmp;
+    }
+    
+    if (min == 0 && max == 0) {
+        max = target_buffer.size;
+    }
     
     View_Summary search_view = open_view(app, &target_view, ViewSplit_Top);
     view_set_split_proportion(app, &search_view, 0.15f);
     view_set_setting(app, &search_view, ViewSetting_ShowScrollbar, 0);
     
-    Buffer_Summary search_buffer;
-    tld_display_buffer_by_name(app, make_lit_string("*search*"),
-                               &search_buffer, &search_view, 0, AccessAll);
-    buffer_replace_range(app, &search_buffer, 0, search_buffer.size, 0, 0);
+    Buffer_Summary search_buffer = get_buffer_by_name(app, literal("*search*"), AccessAll);
+    view_set_buffer(app, &search_view, search_buffer.buffer_id, 0);
     
     Query_Bar find_bar = {0};
     find_bar.prompt = make_lit_string("[M-f]    Find What: ");
-    find_bar.string = tld_search_state.find_what;
+    find_bar.string = search_state->find_what;
     
     Query_Bar replace_bar = {0};
     replace_bar.prompt = make_lit_string("[M-r] Replace With: ");
-    replace_bar.string = tld_search_state.replace_with;
+    replace_bar.string = search_state->replace_with;
     
     String enabled = make_lit_string("[X]");
     String disabled = make_lit_string("[ ]");
     
     Query_Bar case_bar = {0};
     case_bar.prompt = make_lit_string("[c] Case Sensitive: ");
-    case_bar.string = tld_search_state.case_sensitive ? enabled : disabled;
+    case_bar.string = search_state->case_sensitive ? enabled : disabled;
     
     Query_Bar hint_bar = {0};
     hint_bar.prompt = make_lit_string("i/j: find prev./next match -- r: replace -- R: replace all -- a: list all matches -- A: search all buffers");
@@ -333,8 +58,9 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
     start_query_bar(app, &find_bar, 0);
     
     int mode;
-    if (tld_search_state.find_what.size) {
+    if (search_state->find_what.size) {
         mode = 2;
+        set_active_view(app, &target_view);
     } else {
         mode = 0;
     }
@@ -348,10 +74,10 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
     User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
     while (true) {
         if (in.abort) {
-            tld_search_state.find_what.size = 0;
-            tld_search_state.replace_with.size = 0;
-            tld_search_state.case_sensitive = false;
-            tld_search_state.backwards = false;
+            search_state->find_what.size = 0;
+            search_state->replace_with.size = 0;
+            search_state->case_sensitive = false;
+            search_state->backwards = false;
             view_set_highlight(app, &target_view, 0, 0, false);
             
             close_view(app, &search_view);
@@ -405,8 +131,8 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                         mode = 0;
                     }
                 } else if (in.key.keycode == 'c') {
-                    tld_search_state.case_sensitive = !tld_search_state.case_sensitive;
-                    case_bar.string = tld_search_state.case_sensitive ? enabled : disabled;
+                    search_state->case_sensitive = !search_state->case_sensitive;
+                    case_bar.string = search_state->case_sensitive ? enabled : disabled;
                 } else if (in.key.keycode == 'r') {
                     if (key_is_unmodified(&in.key)) {
                         if (target_buffer.lock_flags & AccessProtected) {
@@ -426,15 +152,15 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                         break;
                     }
                     
-                    new_pos = 0;
-                    while (new_pos < target_buffer.size) {
-                        if (tld_search_state.case_sensitive) {
-                            buffer_seek_string_forward(app, &target_buffer, new_pos, 0, expand_str(find_bar.string), &new_pos);
+                    new_pos = min;
+                    while (new_pos < max) {
+                        if (search_state->case_sensitive) {
+                            buffer_seek_string_forward(app, &target_buffer, new_pos, max - replace_bar.string.size, expand_str(find_bar.string), &new_pos);
                         } else {
-                            buffer_seek_string_insensitive_forward(app, &target_buffer, new_pos, 0, expand_str(find_bar.string), &new_pos);
+                            buffer_seek_string_insensitive_forward(app, &target_buffer, new_pos, max - replace_bar.string.size, expand_str(find_bar.string), &new_pos);
                         }
                         
-                        if (new_pos < target_buffer.size) {
+                        if (new_pos < max) {
                             buffer_replace_range(app, &target_buffer, new_pos, new_pos + replace_bar.string.size, expand_str(replace_bar.string));
                         }
                     }
@@ -442,23 +168,25 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                     match.min = 0;
                     match.max = 0;
                 } else if (in.key.keycode == 'i') {
-                    tld_search_state.backwards = true;
+                    search_state->backwards = true;
                     goto_next_match = true;
                 } else if (in.key.keycode == 'k') {
-                    tld_search_state.backwards = false;
+                    search_state->backwards = false;
                     goto_next_match = true;
                 } else if (in.key.keycode == ' ') {
-                    tld_search_state.find_what = find_bar.string;
-                    tld_search_state.replace_with = replace_bar.string;
+                    search_state->find_what = find_bar.string;
+                    search_state->replace_with = replace_bar.string;
                     view_set_highlight(app, &target_view, 0, 0, false);
                     
                     close_view(app, &search_view);
                     return;
                 } else if (in.key.keycode == 'a') {
-                    tld_search_state.find_what = find_bar.string;
-                    tld_search_state.replace_with = replace_bar.string;
-                    tld_search_state.case_sensitive = false;
-                    tld_search_state.backwards = false;
+                    // TODO: List all matches in current buffer only
+                } else if (in.key.keycode == 'A') {
+                    search_state->find_what = find_bar.string;
+                    search_state->replace_with = replace_bar.string;
+                    search_state->case_sensitive = false;
+                    search_state->backwards = false;
                     set_active_view(app, &search_view);
                     
                     end_query_bar(app, &hint_bar, 0);
@@ -467,24 +195,13 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                     end_query_bar(app, &find_bar, 0);
                     
                     int32_t flags = SearchFlag_MatchWholeWord;
-                    if (!tld_search_state.case_sensitive) {
+                    if (!search_state->case_sensitive) {
                         flags |= SearchFlag_CaseInsensitive;
                     }
                     generic_search_all_buffers(app, &global_general, &global_part,
                                                find_bar.string, flags);
                     
                     view_set_highlight(app, &target_view, 0, 0, false);
-                    close_view(app, &target_view);
-                    return;
-                } else if (in.key.keycode == 'A') {
-                    tld_search_state.find_what = find_bar.string;
-                    tld_search_state.replace_with = replace_bar.string;
-                    tld_search_state.case_sensitive = false;
-                    tld_search_state.backwards = false;
-                    view_set_highlight(app, &target_view, 0, 0, false);
-                    
-                    // TODO: Search all buffers
-                    
                     close_view(app, &target_view);
                     return;
                 }
@@ -497,27 +214,27 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
         
         if (goto_next_match) {
             goto_next_match = false;
-            if (tld_search_state.backwards) {
+            if (search_state->backwards) {
                 if (match.max - match.min > 0) {
                     pos = match.min - 1;
-                    if (pos < 0) {
-                        pos = target_buffer.size;
+                    if (pos < min) {
+                        pos = max;
                     }
                 }
                 
-                if (tld_search_state.case_sensitive) {
-                    buffer_seek_string_backward(app, &target_buffer, pos, 0, expand_str(find_bar.string), &new_pos);
+                if (search_state->case_sensitive) {
+                    buffer_seek_string_backward(app, &target_buffer, pos, min, expand_str(find_bar.string), &new_pos);
                 } else {
-                    buffer_seek_string_insensitive_backward(app, &target_buffer, pos, 0, expand_str(find_bar.string), &new_pos);
+                    buffer_seek_string_insensitive_backward(app, &target_buffer, pos, min, expand_str(find_bar.string), &new_pos);
                 }
-                if (new_pos < 0) {
-                    if (tld_search_state.case_sensitive) {
-                        buffer_seek_string_backward(app, &target_buffer, target_buffer.size - find_bar.string.size, 0, expand_str(find_bar.string), &new_pos);
+                if (new_pos < min) {
+                    if (search_state->case_sensitive) {
+                        buffer_seek_string_backward(app, &target_buffer, max - find_bar.string.size, min, expand_str(find_bar.string), &new_pos);
                     } else {
-                        buffer_seek_string_insensitive_backward(app, &target_buffer, target_buffer.size - find_bar.string.size, 0, expand_str(find_bar.string), &new_pos);
+                        buffer_seek_string_insensitive_backward(app, &target_buffer, max - find_bar.string.size, min, expand_str(find_bar.string), &new_pos);
                     }
                     
-                    if (new_pos < 0) {
+                    if (new_pos < min) {
                         match.min = 0;
                         match.max = 0;
                         goto retire_iteration;
@@ -529,24 +246,24 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
             } else {
                 if (match.max - match.min > 0) {
                     pos = match.max + 1;
-                    if (pos >= target_buffer.size) {
-                        pos = 0;
+                    if (pos >= max - find_bar.string.size) {
+                        pos = min;
                     }
                 }
                 
-                if (tld_search_state.case_sensitive) {
-                    buffer_seek_string_forward(app, &target_buffer, pos, 0, expand_str(find_bar.string), &new_pos);
+                if (search_state->case_sensitive) {
+                    buffer_seek_string_forward(app, &target_buffer, pos, max - find_bar.string.size, expand_str(find_bar.string), &new_pos);
                 } else {
-                    buffer_seek_string_insensitive_forward(app, &target_buffer, pos, 0, expand_str(find_bar.string), &new_pos);
+                    buffer_seek_string_insensitive_forward(app, &target_buffer, pos, max - find_bar.string.size, expand_str(find_bar.string), &new_pos);
                 }
-                if (new_pos >= target_buffer.size) {
-                    if (tld_search_state.case_sensitive) {
-                        buffer_seek_string_forward(app, &target_buffer, 0, 0, expand_str(find_bar.string), &new_pos);
+                if (new_pos >= max - find_bar.string.size) {
+                    if (search_state->case_sensitive) {
+                        buffer_seek_string_forward(app, &target_buffer, min, max - find_bar.string.size, expand_str(find_bar.string), &new_pos);
                     } else {
-                        buffer_seek_string_insensitive_forward(app, &target_buffer, 0, 0, expand_str(find_bar.string), &new_pos);
+                        buffer_seek_string_insensitive_forward(app, &target_buffer, min, max - find_bar.string.size, expand_str(find_bar.string), &new_pos);
                     }
                     
-                    if (new_pos >= target_buffer.size) {
+                    if (new_pos >= max - find_bar.string.size) {
                         match.min = 0;
                         match.max = 0;
                         goto retire_iteration;
@@ -569,4 +286,56 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
         
         in = get_user_input(app, EventOnAnyKey, EventOnEsc);
     }
+}
+
+static char tld_search_find_space[512];
+static char tld_search_replace_space[512];
+static tld_Search tld_search_state = {0};
+
+CUSTOM_COMMAND_SIG(tld_find_and_replace) {
+    if (tld_search_state.find_what.str == 0 ||
+        tld_search_state.replace_with.str == 0)
+    {
+        tld_search_state.find_what = make_fixed_width_string(tld_search_find_space);
+        tld_search_state.replace_with = make_fixed_width_string(tld_search_replace_space);
+    }
+    
+    tld_find_and_replace_interactive(app, &tld_search_state, 0, 0);
+}
+
+CUSTOM_COMMAND_SIG(tld_find_and_replace_selection) {
+    tld_search_state = {0};
+    tld_search_state.find_what = make_fixed_width_string(tld_search_find_space);
+    tld_search_state.replace_with = make_fixed_width_string(tld_search_replace_space);
+    
+    View_Summary view = get_active_view(app, AccessAll);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessAll);
+    
+    int32_t cursor = view.cursor.pos;
+    int32_t mark = view.mark.pos;
+    
+    Range range = {0};
+    range.min = (cursor < mark) ? cursor : mark;
+    range.max = (cursor > mark) ? cursor : mark;
+    
+    if (range.max - range.min > ArrayCount(tld_search_find_space)) {
+        range.max = range.min + ArrayCount(tld_search_find_space);
+    }
+    
+    buffer_read_range(app, &buffer, range.min, range.max, tld_search_find_space);
+    tld_search_state.find_what.size = range.max - range.min;
+    
+    tld_find_and_replace_interactive(app, &tld_search_state, 0, 0);
+}
+
+CUSTOM_COMMAND_SIG(tld_find_and_replace_in_range) {
+    if (tld_search_state.find_what.str == 0 ||
+        tld_search_state.replace_with.str == 0)
+    {
+        tld_search_state.find_what = make_fixed_width_string(tld_search_find_space);
+        tld_search_state.replace_with = make_fixed_width_string(tld_search_replace_space);
+    }
+    
+    View_Summary view = get_active_view(app, AccessAll);
+    tld_find_and_replace_interactive(app, &tld_search_state, view.cursor.pos, view.mark.pos);
 }

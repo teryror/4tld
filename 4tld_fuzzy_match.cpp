@@ -557,8 +557,6 @@ tld_push_named_command(Custom_Command_Function *cmd, String cmd_name) {
 
 static inline void
 tld_push_default_command_names() {
-    tld_push_named_command(tld_find_and_replace, make_lit_string("Experimental: find and replace"));
-    
     tld_push_named_command(exit_4coder, make_lit_string("System: exit 4coder"));
     tld_push_named_command(toggle_mouse, make_lit_string("System: toggle mouse suppression"));
     tld_push_named_command(tld_list_named_commands, make_lit_string("System: list named commands"));
@@ -586,6 +584,9 @@ tld_push_default_command_names() {
     tld_push_named_command(open_file_in_quotes, make_lit_string("Files: open filename in quotes"));
     tld_push_named_command(open_matching_file_cpp,
                            make_lit_string("Files: open matching cpp/h file"));
+    
+    tld_push_named_command(tld_find_and_replace_selection, make_lit_string("Find and Replace: selection"));
+    tld_push_named_command(tld_find_and_replace_in_range, make_lit_string("Find and Replace: in range"));
 }
 
 #endif

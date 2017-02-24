@@ -686,7 +686,7 @@ DefineModalKey(modal_double_quote, no_op);
 DefineModalKey(modal_pipe, no_op);
 DefineModalKey(modal_open_angle, no_op);
 DefineModalKey(modal_close_angle, no_op);
-DefineModalKey(modal_question_mark, tld_interactive_find_and_replace_new);
+DefineModalKey(modal_question_mark, no_op);// tld_find_and_replace_new);
 
 HOOK_SIG(global_settings) {
     init_memory(app);
@@ -800,9 +800,9 @@ void set_key_maps(Bind_Helper *context) {
     bind(context, ' ', MDFR_CTRL, word_complete);
     bind(context, 'c', MDFR_ALT, copy);
     bind(context, 'd', MDFR_ALT, cmdid_open_debug);
-    bind(context, 'f', MDFR_ALT, tld_interactive_find_and_replace_continued);
+    bind(context, 'f', MDFR_ALT, tld_find_and_replace);
     bind(context, 'g', MDFR_ALT, goto_line);
-    bind(context, 'h', MDFR_ALT, tld_interactive_find_and_replace_selection);
+    bind(context, 'h', MDFR_ALT, tld_find_and_replace_selection);
     bind(context, 'n', MDFR_ALT, cmdid_interactive_new);
     bind(context, 'o', MDFR_ALT, tld_open_file_fuzzy);
     bind(context, 'p', MDFR_ALT, tld_switch_buffer_fuzzy);
