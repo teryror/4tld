@@ -10,7 +10,9 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   You can `#include` this in your own customization code and call
   `tld_interactive_find_and_replace(5)`, or first
   `#define TLDFR_IMPLEMENT_COMMANDS`, to get custom commands that
-  you can bind directly.
+  you can bind directly. This is now overhauled - matches in the early lines of
+  a buffer are no longer conceiled by query bars, you can paste into the search
+  bar, and toggle case sensitivity.
 * **4tld\_project\_management.cpp** is another drop-in file containing a simple
   system similar to 4coder\_project\_commands.cpp, with some minor changes
   according to my personal preference. After including this file you need to call
@@ -42,9 +44,10 @@ My customization code for [4coder](http://4coder.net) by Allen Webster.
   [here](https://gist.github.com/cmuratori/8c909975de4bb071056b4ec1651077e8).
 
 ## Planned customizations
-* The existing find and replace command was my first one to implement this style
-  of query bar abuse, so naturally it does the worst job of it. I'd like to give
-  the UI here a bit of an overhaul.
+* The project management code is fairly incomplete, though I don't really know
+  what it's lacking. I'll probably stub out debugging related commands, and
+  look into improving error parsing, as well as goto-first-error, next-error
+  commands.
 * The existing `git_quick_save` command is pretty useful, and I would like to do
   more to make version control invisible.
 * Finally, I've been putting off a clean-up pass since about version 4.0.5, when
