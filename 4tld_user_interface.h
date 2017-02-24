@@ -238,17 +238,34 @@ tld_query_complete_filenames(Application_Links *app, User_Input *in, char keycod
         
         int32_t file_index = -1;
         while (in->type == UserInputKey && in->key.keycode == keycode) {
-            for (++file_index; file_index < files.count; ++file_index) {
-                if (match_part_insensitive_cs(files.infos[file_index].filename, prefix)) {
-                    break;
+            if (in->key.modifiers[MDFR_NONE]) { // NOTE: This seems to be either a bug with 4coder, or an error in the 4coder_API headers, as this is 1 if _shift_ is held...?
+                if (file_index < 0) {
+                    file_index = files.count;
+                }
+                
+                for (--file_index; file_index >= 0; --file_index) {
+                    if (match_part_insensitive_cs(files.infos[file_index].filename, prefix)) {
+                        break;
+                    }
+                }
+            } else {
+                for (++file_index; file_index < files.count; ++file_index) {
+                    if (match_part_insensitive_cs(files.infos[file_index].filename, prefix)) {
+                        break;
+                    }
                 }
             }
             
             bar_string->size = incomplete_string.max;
-            if (file_index < files.count) {
+            if (file_index >= 0 && file_index < files.count) {
                 append_ss(bar_string, make_string(files.infos[file_index].filename + prefix.size, files.infos[file_index].filename_len - prefix.size));
-            } else {
+            } else if (file_index >= files.count) {
                 file_index = -1;
+            } else if (file_index < 0) {
+                file_index = files.count;
+            } else {
+                // NOTE: Unreachable
+                Assert(false);
             }
             
             *in = get_user_input(app, EventOnAnyKey, EventOnEsc);
