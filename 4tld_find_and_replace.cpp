@@ -101,6 +101,16 @@ tld_find_and_replace_interactive(Application_Links *app, tld_Search *search_stat
                     }
                 } else if (in.key.keycode == key_del) {
                     find_bar.string.size = 0;
+                } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
+                    char *append_pos   = find_bar.string.str + find_bar.string.size;
+                    int32_t append_len = find_bar.string.memory_size - find_bar.string.size;
+                    find_bar.string.size += clipboard_index(app, 0, 0, append_pos, append_len);
+                    if (find_bar.string.size > find_bar.string.memory_size) {
+                        // NOTE: This happens sometimes because clipboard_index returns the length
+                        // of the clipboard contents, not the number of bytes written.
+                        
+                        find_bar.string.size = find_bar.string.memory_size;
+                    }
                 } else if (key_is_unmodified(&in.key) && in.key.character) {
                     append_s_char(&find_bar.string, in.key.character);
                 }
@@ -118,6 +128,16 @@ tld_find_and_replace_interactive(Application_Links *app, tld_Search *search_stat
                     }
                 } else if (in.key.keycode == key_del) {
                     replace_bar.string.size = 0;
+                } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
+                    char *append_pos   = replace_bar.string.str + replace_bar.string.size;
+                    int32_t append_len = replace_bar.string.memory_size - replace_bar.string.size;
+                    replace_bar.string.size += clipboard_index(app, 0, 0, append_pos, append_len);
+                    if (replace_bar.string.size > replace_bar.string.memory_size) {
+                        // NOTE: This happens sometimes because clipboard_index returns the length
+                        // of the clipboard contents, not the number of bytes written.
+                        
+                        replace_bar.string.size = replace_bar.string.memory_size;
+                    }
                 } else if (key_is_unmodified(&in.key) && in.key.character) {
                     append_s_char(&replace_bar.string, in.key.character);
                 }
