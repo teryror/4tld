@@ -282,7 +282,7 @@ struct tld_Search {
     String find_what;
     String replace_with;
     bool backwards;
-    bool case_insensitive;
+    bool case_sensitive;
 };
 
 static char tld_search_find_space[512];
@@ -317,12 +317,17 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
     replace_bar.prompt = make_lit_string("r: Replace With: ");
     replace_bar.string = tld_search_state.replace_with;
     
-    Query_Bar hints_bar = {0};
-    hints_bar.prompt = make_lit_string("This is where hints go later..."); // TODO
+    String enabled = make_lit_string("[X]");
+    String disabled = make_lit_string("[ ]");
     
-    start_query_bar(app, &hints_bar, 0);
+    Query_Bar case_bar = {0};
+    case_bar.prompt = make_lit_string("c: Case Sensitive: "); // TODO
+    case_bar.string = tld_search_state.case_sensitive ? enabled : disabled;
+    
+    start_query_bar(app, &case_bar, 0);
     start_query_bar(app, &replace_bar, 0);
     start_query_bar(app, &find_bar, 0);
+    set_active_view(app, &target_view);
     
     int mode;
     if (tld_search_state.find_what.size) {
@@ -333,11 +338,18 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
     
     bool goto_next_match = false;
     
+    Range match = make_range(0, 0);
+    int pos = target_view.cursor.pos;
+    int new_pos;
+    
     User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
     while (true) {
         if (in.abort) {
             tld_search_state.find_what.size = 0;
             tld_search_state.replace_with.size = 0;
+            tld_search_state.case_sensitive = false;
+            tld_search_state.backwards = false;
+            view_set_highlight(app, &target_view, 0, 0, false);
             
             close_view(app, &search_view);
             return;
@@ -351,6 +363,7 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                 if (in.key.keycode == '\t') {
                     mode = 1;
                 } else if (in.key.keycode == '\n') {
+                    set_active_view(app, &target_view);
                     mode = 2;
                     goto_next_match = true;
                 } else if (in.key.keycode == key_back) {
@@ -367,6 +380,7 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                 if (in.key.keycode == '\t') {
                     mode = 0;
                 } else if (in.key.keycode == '\n') {
+                    set_active_view(app, &target_view);
                     mode = 2;
                     goto_next_match = true;;
                 } else if (in.key.keycode == key_back) {
@@ -381,13 +395,15 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
             } break;
             case 2: {
                 if (in.key.keycode == '\n') {
-                    // TODO: Replace
                     goto_next_match = true;
                 } else if (in.key.keycode == 'c') {
-                    tld_search_state.case_insensitive = !tld_search_state.case_insensitive;
+                    tld_search_state.case_sensitive = !tld_search_state.case_sensitive;
+                    case_bar.string = tld_search_state.case_sensitive ? enabled : disabled;
                 } else if (in.key.keycode == 'f') {
+                    set_active_view(app, &search_view);
                     mode = 0;
                 } else if (in.key.keycode == 'r') {
+                    set_active_view(app, &search_view);
                     mode = 1;
                 } else if (in.key.keycode == 'i') {
                     tld_search_state.backwards = true;
@@ -398,12 +414,16 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                 } else if (in.key.keycode == ' ') {
                     tld_search_state.find_what = find_bar.string;
                     tld_search_state.replace_with = replace_bar.string;
+                    view_set_highlight(app, &target_view, 0, 0, false);
                     
                     close_view(app, &search_view);
                     return;
                 } else if (in.key.keycode == 'a') {
                     tld_search_state.find_what = find_bar.string;
                     tld_search_state.replace_with = replace_bar.string;
+                    tld_search_state.case_sensitive = false;
+                    tld_search_state.backwards = false;
+                    view_set_highlight(app, &target_view, 0, 0, false);
                     
                     // TODO: List all matches
                     
@@ -412,6 +432,9 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
                 } else if (in.key.keycode == 'A') {
                     tld_search_state.find_what = find_bar.string;
                     tld_search_state.replace_with = replace_bar.string;
+                    tld_search_state.case_sensitive = false;
+                    tld_search_state.backwards = false;
+                    view_set_highlight(app, &target_view, 0, 0, false);
                     
                     // TODO: Search all buffers
                     
@@ -427,8 +450,71 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
         
         if (goto_next_match) {
             goto_next_match = false;
+            if (tld_search_state.backwards) {
+                if (match.max - match.min > 0) {
+                    pos = match.min - 1;
+                    if (pos < 0) {
+                        pos = target_buffer.size;
+                    }
+                }
+                
+                if (tld_search_state.case_sensitive) {
+                    buffer_seek_string_backward(app, &target_buffer, pos, 0, expand_str(find_bar.string), &new_pos);
+                } else {
+                    buffer_seek_string_insensitive_backward(app, &target_buffer, pos, 0, expand_str(find_bar.string), &new_pos);
+                }
+                if (new_pos < 0) {
+                    if (tld_search_state.case_sensitive) {
+                        buffer_seek_string_backward(app, &target_buffer, target_buffer.size - find_bar.string.size, 0, expand_str(find_bar.string), &new_pos);
+                    } else {
+                        buffer_seek_string_insensitive_backward(app, &target_buffer, target_buffer.size - find_bar.string.size, 0, expand_str(find_bar.string), &new_pos);
+                    }
+                    
+                    if (new_pos < 0) {
+                        match.min = 0;
+                        match.max = 0;
+                        break;
+                    }
+                }
+                
+                match.min = new_pos;
+                match.max = match.min + find_bar.string.size;
+            } else {
+                if (match.max - match.min > 0) {
+                    pos = match.max + 1;
+                    if (pos >= target_buffer.size) {
+                        pos = 0;
+                    }
+                }
+                
+                if (tld_search_state.case_sensitive) {
+                    buffer_seek_string_forward(app, &target_buffer, pos, 0, expand_str(find_bar.string), &new_pos);
+                } else {
+                    buffer_seek_string_insensitive_forward(app, &target_buffer, pos, 0, expand_str(find_bar.string), &new_pos);
+                }
+                if (new_pos >= target_buffer.size) {
+                    if (tld_search_state.case_sensitive) {
+                        buffer_seek_string_forward(app, &target_buffer, 0, 0, expand_str(find_bar.string), &new_pos);
+                    } else {
+                        buffer_seek_string_insensitive_forward(app, &target_buffer, 0, 0, expand_str(find_bar.string), &new_pos);
+                    }
+                    
+                    if (new_pos >= target_buffer.size) {
+                        match.min = 0;
+                        match.max = 0;
+                        break;
+                    }
+                }
+                
+                match.min = new_pos;
+                match.max = match.min + find_bar.string.size;
+            }
             
-            // TODO
+            if (match.max - match.min > 0) {
+                view_set_highlight(app, &target_view, match.min, match.max, true);
+            } else {
+                view_set_highlight(app, &target_view, 0, 0, false);
+            }
         }
         
         in = get_user_input(app, EventOnAnyKey, EventOnEsc);
