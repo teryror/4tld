@@ -264,13 +264,24 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
         search_key_changed = false;
         full_rescan = false;
         
-        if (in.abort) return -1;
+        if (in.abort) {
+            for (int i = 0; i < ArrayCount(result_indices); ++i) {
+                end_query_bar(app, &result_bars[i], 0);
+            }
+            
+            return -1;
+        }
         
         if (in.type == UserInputKey) {
             if (in.key.keycode == '\n') {
                 if (result_count > 0) {
                     if (result_selected_index < 0)
                         result_selected_index = 0;
+                    
+                    for (int i = 0; i < ArrayCount(result_indices); ++i) {
+                        end_query_bar(app, &result_bars[i], 0);
+                    }
+                    
                     return result_indices[result_selected_index];
                 }
             } else if (in.key.keycode == key_back) {
@@ -416,8 +427,10 @@ tld_fuzzy_construct_filename_list(Application_Links *app,
     return result;
 }
 
-static void
+static bool32
 __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String work_dir) {
+    bool32 result;
+    
     int32_t mem_size = 1024 * 1024;
     Partition mem = make_part(malloc(mem_size), mem_size);
     
@@ -430,7 +443,9 @@ __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String wo
     start_query_bar(app, &search_bar, 0);
     
     int32_t selected_file_index = tld_query_list_fuzzy(app, &search_bar, search_space);
-    if (selected_file_index >= 0) {
+    result = (selected_file_index >= 0);
+    
+    if (result) {
         String selected_file = search_space.items[selected_file_index].value;
         char full_path_space[1024];
         String full_path = make_fixed_width_string(full_path_space);
@@ -441,6 +456,8 @@ __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String wo
     }
     
     free(mem.base);
+    end_query_bar(app, &search_bar, 0);
+    return result;
 }
 
 CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {

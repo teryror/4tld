@@ -166,17 +166,17 @@ tld_iterm_handle_command(Application_Links *app,
 
 #ifdef TLDFM_IMPLEMENT_COMMANDS
 
-#define tld_iterm_switch_buffer_command tld_switch_buffer_fuzzy
+#define tld_iterm_switch_buffer_interactive exec_command(app, tld_switch_buffer_fuzzy)
 #define tld_iterm_open_file_interactive(app, view, work_dir) __tld_open_file_fuzzy_impl(app, view, work_dir)
 
 #else
 
-#define tld_iterm_switch_buffer_command cmdid_interactive_switch_buffer
+#define tld_iterm_switch_buffer_interactive exec_command(app, cmdid_interactive_switch_buffer)
 #define tld_iterm_open_file_interactive(...) exec_command(app, cmdid_interactive_open)
 
 #endif
 
-static bool
+static bool32
 tld_iterm_query_user_command(Application_Links *app,
                              Buffer_Identifier buffer, View_Summary *view,
                              Query_Bar *cmd_bar, Query_Bar *dir_bar,
@@ -207,8 +207,12 @@ tld_iterm_query_user_command(Application_Links *app,
                 end_query_bar(app, cmd_bar, 0);
                 end_query_bar(app, dir_bar, 0);
                 
-                tld_iterm_open_file_interactive(app, view, dir_bar->prompt);
-                return false;
+                if (tld_iterm_open_file_interactive(app, view, dir_bar->prompt)) {
+                    return false;
+                }
+                
+                start_query_bar(app, cmd_bar, 0);
+                start_query_bar(app, dir_bar, 0);
             } else if (in.key.keycode == 'q' && in.key.modifiers[MDFR_ALT]) {
                 exec_command(app, kill_buffer);
                 return false;
@@ -216,7 +220,7 @@ tld_iterm_query_user_command(Application_Links *app,
                 end_query_bar(app, cmd_bar, 0);
                 end_query_bar(app, dir_bar, 0);
                 
-                exec_command(app, tld_iterm_switch_buffer_command);
+                tld_iterm_switch_buffer_interactive;
                 return false;
             } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
                 char *append_pos =   cmd_bar->string.str + cmd_bar->string.size;
