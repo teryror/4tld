@@ -146,6 +146,26 @@ void tld_project_open_source_files(Application_Links *app, tld_Project *project,
     end_temp_memory(temp);
 }
 
+static bool32
+tld_project_build_current_config(Application_Links *app, tld_Project *project,
+                                 Buffer_Identifier buffer, View_Summary *view)
+{
+    uint32_t config_index = project->build_configurations_current;
+    return exec_system_command(app, view, buffer, expand_str(project->working_directory),
+                               expand_str(project->build_configurations[config_index]),
+                               CLI_OverlapWithConflict | CLI_CursorAtEnd);
+}
+
+static bool32
+tld_project_debug_current_config(Application_Links *app, tld_Project *project,
+                                 Buffer_Identifier buffer, View_Summary *view)
+{
+    uint32_t config_index = project->debug_configurations_current;
+    return exec_system_command(app, view, buffer, expand_str(project->working_directory),
+                               expand_str(project->debug_configurations[config_index]),
+                               CLI_OverlapWithConflict | CLI_CursorAtEnd);
+}
+
 #ifdef TLDPM_IMPLEMENT_COMMANDS
 
 static tld_Project tld_current_project = {0};
@@ -178,8 +198,6 @@ void tld_project_memory_free() {
 CUSTOM_COMMAND_SIG(tld_current_project_build) {
     if (!tld_current_project.working_directory.str) return;
     
-    String build_command = tld_current_project.build_configurations[tld_current_project.build_configurations_current];
-    
     Buffer_Summary buffer;
     View_Summary view;
     tld_display_buffer_by_name(app, make_lit_string("*build*"), &buffer, &view, true, AccessAll);
@@ -187,8 +205,7 @@ CUSTOM_COMMAND_SIG(tld_current_project_build) {
     Buffer_Identifier buffer_id = {0};
     buffer_id.id = buffer.buffer_id;
     
-    exec_system_command(app, &view, buffer_id, expand_str(tld_current_project.working_directory),
-                        expand_str(build_command), CLI_OverlapWithConflict | CLI_CursorAtEnd);
+    tld_project_build_current_config(app, &tld_current_project, buffer_id, &view);
 }
 
 CUSTOM_COMMAND_SIG(tld_current_project_save_and_build) {
@@ -203,7 +220,15 @@ CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
                                                  &tld_current_project.build_configurations_current);
     
     if (changed) {
-        exec_command(app, tld_current_project_build);
+        Buffer_Summary buffer;
+        View_Summary view;
+        tld_display_buffer_by_name(app, make_lit_string("*build*"),
+                                   &buffer, &view, true, AccessAll);
+        
+        Buffer_Identifier buffer_id = {0};
+        buffer_id.id = buffer.buffer_id;
+        
+        tld_project_build_current_config(app, &tld_current_project, buffer_id, &view);
     }
 }
 
@@ -215,7 +240,18 @@ CUSTOM_COMMAND_SIG(tld_current_project_save_and_change_build_config) {
 CUSTOM_COMMAND_SIG(tld_current_project_debug) {
     if (!tld_current_project.working_directory.str) return;
     
-    String debug_config = tld_current_project.debug_configurations[tld_current_project.debug_configurations_current];
+    Buffer_Summary buffer;
+    View_Summary view;
+    tld_display_buffer_by_name(app, make_lit_string("*debug*"), &buffer, &view, true, AccessAll);
+    
+    Buffer_Identifier buffer_id = {0};
+    buffer_id.id = buffer.buffer_id;
+    
+    tld_project_debug_current_config(app, &tld_current_project, buffer_id, &view);
+}
+
+CUSTOM_COMMAND_SIG(tld_current_project_build_and_debug) {
+    if (!tld_current_project.working_directory.str) return;
     
     Buffer_Summary buffer;
     View_Summary view;
@@ -224,18 +260,14 @@ CUSTOM_COMMAND_SIG(tld_current_project_debug) {
     Buffer_Identifier buffer_id = {0};
     buffer_id.id = buffer.buffer_id;
     
-    exec_system_command(app, &view, buffer_id, expand_str(tld_current_project.working_directory),
-                        expand_str(debug_config), CLI_OverlapWithConflict | CLI_CursorAtEnd);
-}
-
-CUSTOM_COMMAND_SIG(tld_current_project_build_and_debug) {
-    exec_command(app, tld_current_project_build);
-    exec_command(app, tld_current_project_debug);
+    if (tld_project_build_current_config(app, &tld_current_project, buffer_id, &view)) {
+        tld_project_debug_current_config(app, &tld_current_project, buffer_id, &view);
+    }
 }
 
 CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_debug) {
-    exec_command(app, tld_current_project_save_and_build);
-    exec_command(app, tld_current_project_debug);
+    save_all_dirty_buffers(app);
+    exec_command(app, tld_current_project_build_and_debug);
 }
 
 CUSTOM_COMMAND_SIG(tld_current_project_change_debug_config) {
@@ -245,18 +277,36 @@ CUSTOM_COMMAND_SIG(tld_current_project_change_debug_config) {
                                                  &tld_current_project.debug_configurations_current);
     
     if (changed) {
-        exec_command(app, tld_current_project_debug);
+        Buffer_Summary buffer;
+        View_Summary view;
+        tld_display_buffer_by_name(app, make_lit_string("*debug*"),
+                                   &buffer, &view, true, AccessAll);
+        
+        Buffer_Identifier buffer_id = {0};
+        buffer_id.id = buffer.buffer_id;
+        
+        tld_project_debug_current_config(app, &tld_current_project, buffer_id, &view);
     }
 }
 
 CUSTOM_COMMAND_SIG(tld_current_project_build_and_change_debug_config) {
-    exec_command(app, tld_current_project_build);
-    exec_command(app, tld_current_project_change_debug_config);
+    if (!tld_current_project.working_directory.str) return;
+    
+    Buffer_Summary buffer;
+    View_Summary view;
+    tld_display_buffer_by_name(app, make_lit_string("*debug*"), &buffer, &view, true, AccessAll);
+    
+    Buffer_Identifier buffer_id = {0};
+    buffer_id.id = buffer.buffer_id;
+    
+    if (tld_project_build_current_config(app, &tld_current_project, buffer_id, &view)) {
+        exec_command(app, tld_current_project_change_debug_config);
+    }
 }
 
 CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_change_debug_config) {
-    exec_command(app, tld_current_project_save_and_build);
-    exec_command(app, tld_current_project_change_debug_config);
+    save_all_dirty_buffers(app);
+    exec_command(app, tld_current_project_build_and_change_debug_config);
 }
 
 #endif
