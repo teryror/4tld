@@ -74,7 +74,7 @@ Since that is working fine, it is time to think about the precise constraints we
 
 The problem here was that I defined one of the constraints in a naive fashion, so it did not actually represent the properties I wanted to express. This time around, I started by defining constraints again, except I derived the constraints from actual examples, rather than informal definitions of the rules.
 
-I implement the new heuristic in this commit, but leave the explanation for now. Here it is in the abstract:
+Here is the heuristic I arrived at:
 
     score(i, j) = if (score(i - 1, j - 1) && A[i] == B[j]) {
         let x = c + s
@@ -90,7 +90,7 @@ Here, `x` is the 'value' of the match, `c` and `s` being bonuses for matching un
 
 Where `S` is the actual weight we need to tune.
 
-`c` is the __consecutive match bonus__. In my old heuristic, this looked much the same (`let c = if (A[i - 1] == B[j - 1]) Cb else Ca`), which is what caused one of my problems: You can weight this such that, up to a given pattern length, abbreviations will always be preferred to consecutive matches, despite `S < Cb - Ca`, which is necessary to ensure that one long sequence will always score higher than multiple sequences. However, I did not take into account that sequences will often start after a separator, giving them both bonuses, making it impossible for abbreviations to score higher than sequences.
+`c` is the __consecutive match bonus__. In my old heuristic, this looked much the same (`let c = if (A[i - 1] == B[j - 1]) Cb else Ca`), which is what caused one of my problems: You can set the weights such that, up to a given pattern length, abbreviations will always be preferred to consecutive matches, despite `S < Cb - Ca`, which is necessary to ensure that one long sequence will always score higher than multiple sequences. However, I did not take into account that sequences will often start after a separator, giving them both bonuses, making it impossible for abbreviations to score higher than sequences.
 
 Turns out you cannot have both while also keeping `Cb` constant. So I replaced it with
 
@@ -130,12 +130,12 @@ It might even be possible to account for this inside the scoring function; if th
 
 __Side Note:__ I think I actually found a way to approximate this, though it requires reading `score(i - 2, j - 1)`, therefore needs a larger ring buffer, and will also match strings that are missing characters from the pattern entirely. Additionally, I haven't even tested it, much less proven it to work, which I don't consider worthwhile considering the drawbacks. Figuring this out is left as an exercise for the reader (as I don't feel confident in posting claims based on hunches like this).
 
-All in all, I think Sublime just iterates over all transpositions and runs the search with all of them, which is easily parallelized, and basically trivial compared to the actual search algorithm. Either that, linear searches inside the scoring function (which also matches his mention of sacrificing speed), or a different algorithm altogether.
+All in all, I think Sublime probably just iterates over all transpositions and runs the search with all of them, which is basically trivial compared to the actual search algorithm. Either that, linear searches inside the scoring function (which also matches his mention of sacrificing speed), or a different algorithm altogether. This is what I do, and with some other combinations, totally feasible.
 
 ## Optimizations
 So, how can we make this go faster?
 
-My implementation already uses one optimization: given that the rows up to the rows of the score table up to the first match do not vary from the initial row at all, we can skip ahead in the string, potentially exiting early if there are not enough characters left to produce a full match.
+Starting with an obvious optimization, which my implementation had at a pretty early stage: given that the rows of the score table up to the first match do not vary from the initial row at all, we can skip ahead in the string, potentially exiting early if there are not enough characters left to produce a full match.
 
 We can be even more clever and skip evaluation of a number of cells: Consider the following table:
 
@@ -156,15 +156,15 @@ We can be even more clever and skip evaluation of a number of cells: Consider th
     12 c _ _ _ _ x x
     13 h _ _ _ _ _ X
 
-Since the first row is constant, the triangle of `0` at the top right is constant as well, while the triangle of `_` at the bottom left does not affect `X`, the score of the match, at all. This is because, with our current heuristic, the value of a given cell only depends on the cell above it, and the cell the immediate left of _that_. That means that we can shave off an additional `m^2` evaluations of our heuristic by reshaping the loop boundaries of the algorithm. (__Note:__ this is the first one I actually measured. I didn't do any rigorous, statistical analysis, but it gave an estimated speedup of about 50%).
+Since the first row is constant, the triangle of `0` at the top right is constant as well, while the triangle of `_` at the bottom left does not affect `X`, the score of the match, at all. This is because, with our current heuristic, the value of a given cell only depends on the cell above it, and the cell the immediate left of _that_. That means that we can shave off an additional `m^2` evaluations of our heuristic by reshaping the loop boundaries of the algorithm. (__Note:__ this is the first optimization where I actually measured. I didn't do any rigorous, statistical analysis, but it gave an estimated speedup of about 50%).
 
 Even more specific to our application, we can exploit the fact that we are building up the search pattern incrementally; appending a character to the pattern will never turn a non-match into a match, so we can reduce the number of strings we attempt to match as pattern length increases. We can provide results for pattern prefixes (i.e. support instant backspace) by storing them. I will try this option last, as it does not apply to applications outside of the fuzzy list panels, and would require a significant change to my query code. (__Note:__ this turned out to be even more effective than I imagined. I'm now interactively searching the list I used for testing in about 0.1% of the time it took when I started optimizing).
 
-There's more hardware-oriented optimizations to consider as well: We could try to rephrase our heuristic to use as few branches as possible, maybe even none at all. This would prevent pipeline flushes due to branch prediction going wrong.
+There's more hardware-oriented optimizations to consider as well: We could try to rephrase our heuristic to use as few branches as possible, maybe even none at all. This would prevent pipeline flushes due to branch prediction going wrong (__Note:__ I actually tried this before the one I just mentioned, but just after some initial steps, this seemed to _slow down_ the search. Had I gone through with it, it might have paid off, but that's not what I did).
 
 Doing so would also open up the path to using SIMD instructions, allowing evaluation of up to 16 cells at a time. While probably a really fun problem in itself, I doubt we're going to be doing this, since it imposes some quite heavy restrictions on the rest of the code, and even the score itself, which would probably have to fit in an unsigned byte value, which is cutting it really close, considering its maximum value is given as a quadratic equation.
 
-If your use case allows preprocessing, while also requiring the performance boost from indexing, you should look into [BK-Trees][5] and [Levenshtein Automata][6], one of which could probably be modified to support our custom heuristics. I haven't looked into that yet, as a list of filenames is extremely volatile, and is therefore rebuilt on demand in my code.
+If your use case allows preprocessing, while also requiring the performance boost from indexing, you should look into [BK-Trees][5] and [Levenshtein Automata][6], one of which could probably be modified to support our custom heuristics. I haven't looked into that yet, as a list of filenames is extremely volatile, and is therefore rebuilt on demand in my code (__Note:__ Since initially writing this paragraph, I looked into both of those myself -- both data structures require that the distance function fulfill certain properties, and the heuristic I'm using here, at least, fulfills pretty much none of them, but you may still want to look into them to see if there are some easy modifications that would still allow you to use this).
 
 [1]: https://blog.forrestthewoods.com/reverse-engineering-sublime-text-s-fuzzy-match-4cffeed33fdb#.d05n81yjy
 [2]: https://www.reddit.com/r/programming/comments/4cfz8r/reverse_engineering_sublime_texts_fuzzy_match/d1i7unr/
