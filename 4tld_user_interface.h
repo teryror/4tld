@@ -128,7 +128,7 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
 // 
 
 static bool32
-tld_query_persistent_option(Application_Links *app, String *strings,
+tld_query_persistent_option(Application_Links *app, String hint, String *strings,
                             uint32_t count, uint32_t *selected_index)
 {
     bool32 result;
@@ -141,6 +141,10 @@ tld_query_persistent_option(Application_Links *app, String *strings,
         items[i].string = strings[i];
         start_query_bar(app, &items[i], 0);
     }
+    
+    Query_Bar hint_bar = {0};
+    hint_bar.prompt = hint;
+    start_query_bar(app, &hint_bar, 0);
     
     while (true) {
         items[current_selection].prompt = make_lit_string("* ");
@@ -173,6 +177,7 @@ tld_query_persistent_option(Application_Links *app, String *strings,
     for (int i = count - 1; i >= 0; --i) {
         end_query_bar(app, &items[i], 0);
     }
+    end_query_bar(app, &hint_bar, 0);
     
     if (result) {
         *selected_index = current_selection;

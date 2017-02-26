@@ -215,7 +215,9 @@ CUSTOM_COMMAND_SIG(tld_current_project_save_and_build) {
 
 CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
     if (!tld_current_project.build_configurations_count) return;
-    bool32 changed = tld_query_persistent_option(app, tld_current_project.build_configurations, 
+    
+    bool32 changed = tld_query_persistent_option(app, make_lit_string("Build Configuration:"),
+                                                 tld_current_project.build_configurations, 
                                                  tld_current_project.build_configurations_count,
                                                  &tld_current_project.build_configurations_current);
     
@@ -272,7 +274,8 @@ CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_debug) {
 
 CUSTOM_COMMAND_SIG(tld_current_project_change_debug_config) {
     if (!tld_current_project.debug_configurations_count) return;
-    bool32 changed = tld_query_persistent_option(app, tld_current_project.debug_configurations,
+    bool32 changed = tld_query_persistent_option(app, make_lit_string("Debug Configuration:"),
+                                                 tld_current_project.debug_configurations,
                                                  tld_current_project.debug_configurations_count,
                                                  &tld_current_project.debug_configurations_current);
     
