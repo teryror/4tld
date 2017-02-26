@@ -2,6 +2,21 @@
 File: 4tld_user_interface.h
 Author: Tristan Dannenberg
 Notice: No warranty is offered or implied; use this code at your own risk.
+*******************************************************************************
+LICENSE
+
+This software is dual-licensed to the public domain and under the following
+license: you are granted a perpetual, irrevocable license to copy, modify,
+publish, and distribute this file as you see fit.
+*******************************************************************************
+This file hosts the maximum amount of user interface code shared between
+multiple command packs. I'm not a great API designer, so this may not actually
+allow you to build similar interfaces faster, this is mostly so that I can
+change the behaviour of similar UI elements in one step.
+
+Note that, because of the nature of this file, most drop-in command packs
+#include this file, so this is a strict dependency, no matter which one you're
+using.
 ******************************************************************************/
 #ifndef FTLD_USER_INTERFACE_H
 #define FTLD_USER_INTERFACE_H
@@ -127,10 +142,15 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
 // REGION(Query_Bars)
 // 
 
+// Presents the user with up to seven Strings to choose from, with the assumption
+// that the selected option (or rather, its index in the array) is persistent.
+// The selected option is marked with a star, pressing ESC leaves it untouched.
 static bool32
 tld_query_persistent_option(Application_Links *app, String hint, String *strings,
                             uint32_t count, uint32_t *selected_index)
 {
+    Assert(count <= 7);
+    
     bool32 result;
     Query_Bar items[7];
     
@@ -186,6 +206,7 @@ tld_query_persistent_option(Application_Links *app, String hint, String *strings
     return result;
 }
 
+// A ring buffer of strings
 struct tld_StringHistory {
     String* strings;
     int32_t size;

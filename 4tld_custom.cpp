@@ -2,6 +2,20 @@
 File: 4tld_custom.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or implied; use this code at your own risk.
+*******************************************************************************
+LICENSE
+
+This software is dual-licensed to the public domain and under the following
+license: you are granted a perpetual, irrevocable license to copy, modify,
+publish, and distribute this file as you see fit.
+*******************************************************************************
+This is my main customization file, containing all the random, small commands I
+have. Parts of it are stitched together from the default custom layer that was
+shipped with the 4coder-alpha-4-0-5-power build, including 4coder_casey.cpp.
+
+I did not spend any time making this file reusable at all; consider it example
+code. If you do want my full configuration, use this in its entirety, or copy
+out the individual commands you want.
 ******************************************************************************/
 
 #include "4coder_default_include.cpp"
@@ -692,6 +706,8 @@ HOOK_SIG(global_settings) {
     init_memory(app);
     
     tld_push_default_command_names();
+    tld_push_named_command(tld_find_and_replace_selection, make_lit_string("Find and Replace: selection"));
+    tld_push_named_command(tld_find_and_replace_in_range, make_lit_string("Find and Replace: in range"));
     
     change_theme(app, literal("stb"));
     change_font(app, literal("Inconsolata"), true);

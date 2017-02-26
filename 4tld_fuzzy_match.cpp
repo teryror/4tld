@@ -2,25 +2,62 @@
 File: 4tld_fuzzy_match.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or imlied; use this code at your own risk.
+*******************************************************************************
+LICENSE
+
+This software is dual-licensed to the public domain and under the following
+license: you are granted a perpetual, irrevocable license to copy, modify,
+publish, and distribute this file as you see fit.
+*******************************************************************************
+This file hosts a fuzzy list panel, as you may know it from Sublime Text,
+TextMate, Atom Text, and other editors. If you would like to know how this is
+implemented, there is a detailed write-up about it at txt/fuzz.md.
+
+Preprocessor Variables:
+* TLDFM_MAX_QUERY_SIZE - The maximum length of a pattern to search a list with.
+  This is not intended to be modified, as some of the optimizations that make
+  the search with long patterns fast rely on this being no greater than 64,
+  and setting it to anything below would be pointless in most use cases.
+* TLDFM_DUMB_HEURISTIC - If this is defined, you will get a faster heuristic,
+  which will give very different results. To some users, this may be more
+  intuitive, while others may want to search so ridiculously big data sets they
+  cannot afford the smart heuristic.
+* TLDFM_IMPLEMENT_COMMANDS - If this is defined, the custom commands listed
+  below are implemented. This is set up this way, so that you can define your
+  own variations without compiling commands you won't use, and other command
+  packs can utilize these commands if you _are_ using them.
+* TLD_HOME_DIRECTORY - a flag designating whether the function
+  tld_get_home_directory(ApplicatioN_Links, String) is defined. This is used
+  to determine what directory to look in when constructing the list of files
+  you can open with the fuzzy open command. If you first include
+  4tld_project_management, the project's working directory is used instead.
+* TLDFM_DEFAULT_DIR_FILTER - The name of the function that filters whether the
+  function that constructs the list of files that can be opened should recurse
+  on a given directory name. If this is not defined, a default implementation
+  ignoring hidden directories (starting with a '.' character) is provided.
+  You can easily define a matching function with the TLDFM_DIR_FILTER_SIG
+  macro, which works just like the CUSTOM_COMMAND_SIG macro you should already
+  know.
+* TLDFM_FILE_LIST_CAPACITY - The number of file names the file list
+  construction function should allocate space for. This defaults to (16 * 1024).
+  
+Provided Commands:
+* tld_open_file_fuzzy
+* tld_switch_buffer_fuzzy
+* tld_execute_arbitrary_command_fuzzy
+* tld_list_named_commands
+
+Note that, to use tld_execute_arbitrary_command_fuzzy, you will need to
+initialize the global command list. This requires use of the
+tld_push_named_command function. A number of rarely used commands from the
+default customization layer are pushed in the tld_push_default_command_names
+function.
 ******************************************************************************/
-#include "windows.h"
 
-#define TLDFM_DIR_FILTER_SIG(name) static bool name(char *filename, int32_t filename_len)
-
-#ifndef TLD_HOME_DIRECTORY
-#define TLD_HOME_DIRECTORY
-static void
-tld_get_home_directory(Application_Links *app, String *dest) {
-    dest->size = directory_get_hot(app, dest->str, dest->memory_size);
-}
-#endif
-
-#ifndef TLDFM_MAX_QUERY_SIZE
-// This will be important once we have a fuzzy_match function that actually needs working memory.
 #define TLDFM_MAX_QUERY_SIZE 64
-#endif
 
 #ifdef TLDFM_DUMB_HEURISTIC
+// Check if `val` contains all characters in `key` in the same order.
 static int32_t
 tld_fuzzy_match_ss(String key, String val) {
     if (val.size < key.size) return 0;
@@ -62,6 +99,7 @@ tld_fuzzy_match_char(char a, char b) {
 #define min(a, b) ((a < b) ? a : b)
 #endif
 
+// This is where the magic happens. Return higher scores for better matches.
 static int32_t
 tld_fuzzy_match_ss(String key, String val) {
     if (key.size == 0) {
@@ -127,16 +165,24 @@ tld_fuzzy_match_ss(String key, String val) {
 
 #endif
 
+// A String with meta data that allows us to speed up the query
 struct tld_String {
     String value;
     uint64_t bit_stack;
 };
 
+// An array of tld_String to be used by the query function
 struct tld_StringList {
     tld_String *items;
     int32_t count;
 };
 
+// Query a user for a pattern to search the list with, show the top 7 results
+// (or fewer, if not enough strings match the pattern, even with a low score).
+// Navigate the result list with the arrow keys, press enter to accept the selected String.
+// 
+// Returns the index of the selected string in the provided StringList,
+// or -1 if the query was canceled with ESC.
 static int32_t
 tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringList list) {
     int32_t result_indices[7];
@@ -326,9 +372,19 @@ tld_query_list_fuzzy(Application_Links *app, Query_Bar *search_bar, tld_StringLi
 
 #ifdef TLDFM_IMPLEMENT_COMMANDS
 
+#ifndef TLD_HOME_DIRECTORY
+#define TLD_HOME_DIRECTORY
+static void
+tld_get_home_directory(Application_Links *app, String *dest) {
+    dest->size = directory_get_hot(app, dest->str, dest->memory_size);
+}
+#endif
+
 #ifndef TLD_DEFAULT_OPEN_FILE_COMMAND
 #define TLD_DEFAULT_OPEN_FILE_COMMAND tld_open_file_fuzzy
 #endif
+
+#define TLDFM_DIR_FILTER_SIG(name) static bool name(char *filename, int32_t filename_len)
 
 #ifndef TLDFM_DEFAULT_DIR_FILTER
 #define TLDFM_DEFAULT_DIR_FILTER tld_ignore_hidden_files
@@ -349,6 +405,7 @@ TLDFM_DIR_FILTER_SIG(tld_ignore_hidden_files) {
 #define TLDFM_DIR_QUEUE_CAPACITY (TLDFM_FILE_LIST_CAPACITY / 16)
 #endif
 
+// Recursively gets all files in a directory and all its subdirectories.
 static tld_StringList
 tld_fuzzy_construct_filename_list(Application_Links *app,
                                   String work_dir,
@@ -427,6 +484,9 @@ tld_fuzzy_construct_filename_list(Application_Links *app,
     return result;
 }
 
+// Construct the file list from the given working directory,
+// perform the fuzzy query, and open the selected file.
+// Returns `true` if a file was opened, `false` otherwise.
 static bool32
 __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String work_dir) {
     bool32 result;
@@ -460,6 +520,7 @@ __tld_open_file_fuzzy_impl(Application_Links *app, View_Summary *view, String wo
     return result;
 }
 
+// Open a file in the home directory or one of its subdirectories.
 CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
     View_Summary view = get_active_view(app, AccessAll);
     
@@ -470,6 +531,7 @@ CUSTOM_COMMAND_SIG(tld_open_file_fuzzy) {
     __tld_open_file_fuzzy_impl(app, &view, home_directory);
 }
 
+// Switch to the selected buffer.
 CUSTOM_COMMAND_SIG(tld_switch_buffer_fuzzy) {
     tld_String list_space[128];
     tld_StringList search_space = {0};
@@ -504,6 +566,7 @@ typedef Custom_Command_Function *Custom_Command_Function_Pointer;
 static  tld_StringList tld_command_names = {0};
 static  Custom_Command_Function_Pointer *tld_command_functions = 0;
 
+// Select a command from the fuzzy list and execute it.
 CUSTOM_COMMAND_SIG(tld_execute_arbitrary_command_fuzzy) {
     if (tld_command_functions == 0) return;
     
@@ -521,6 +584,7 @@ CUSTOM_COMMAND_SIG(tld_execute_arbitrary_command_fuzzy) {
     }
 }
 
+// List all commands on the fuzzy list in the *help* buffer.
 CUSTOM_COMMAND_SIG(tld_list_named_commands) {
     Buffer_Summary buffer;
     tld_display_buffer_by_name(app, make_lit_string("*help*"), &buffer, 0, 0, AccessAll);
@@ -532,6 +596,7 @@ CUSTOM_COMMAND_SIG(tld_list_named_commands) {
     }
 }
 
+// Add a command to the fuzzy list.
 static inline bool32
 tld_push_named_command(Custom_Command_Function *cmd, String cmd_name) {
     if (tld_command_names.items == 0) {
@@ -555,6 +620,7 @@ tld_push_named_command(Custom_Command_Function *cmd, String cmd_name) {
     return false;
 }
 
+// Add the default commands to the fuzzy list.
 static inline void
 tld_push_default_command_names() {
     tld_push_named_command(exit_4coder, make_lit_string("System: exit 4coder"));
@@ -584,9 +650,6 @@ tld_push_default_command_names() {
     tld_push_named_command(open_file_in_quotes, make_lit_string("Files: open filename in quotes"));
     tld_push_named_command(open_matching_file_cpp,
                            make_lit_string("Files: open matching cpp/h file"));
-    
-    tld_push_named_command(tld_find_and_replace_selection, make_lit_string("Find and Replace: selection"));
-    tld_push_named_command(tld_find_and_replace_in_range, make_lit_string("Find and Replace: in range"));
 }
 
 #endif

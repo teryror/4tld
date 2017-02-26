@@ -2,6 +2,67 @@
 File: 4tld_project_management.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or implied; use this code at your own risk.
+*******************************************************************************
+LICENSE
+
+This software is dual-licensed to the public domain and under the following
+license: you are granted a perpetual, irrevocable license to copy, modify,
+publish, and distribute this file as you see fit.
+*******************************************************************************
+This file hosts a replacement for the default project management code. I
+decided to make this because the existing one gives the per-project
+configuration too much power, and I would rather have more consistent
+behaviour enforced.
+
+This parses project data from a buffer, rather than a file, so I suggest
+calling tld_project_load_from_buffer from the open file hook when you detect a
+project file.
+
+A project specification consists of blank lines, comment lines, and key/value
+pairs on a single line. Comment lines are designated with a '#' character,
+after any optional leading whitespace.
+
+Key/Value pairs are separated by any amount of whitespace. The keys this code
+understands are as follows:
+* source.file  - The relative path to a source file. You may use a single '*'
+  character as a wildcard, e.g. `source.file src/*.cpp` to open multiple files
+  at once. Note that source files are opened in a separate call to
+  tld_project_open_source_files.
+* build.config - A system command line for use by the
+  tld_project_build_current_config function.
+* debug.config - A system command line for use by the
+  tld_project_debug_current_config function. Note that this is sort of stub
+  function, meant for later extension, if 4coder ever gets integrated
+  debugging features.
+  
+Preprocessor Variables:
+* TLDPM_SOURCE_FILES_CAPACITY - The maximum number of source.file values that
+  will actually be stored on a project.
+* TLDPM_CONFIGURATIONS_CAPACITY - The maximum number of both build.config and
+  source.config values that will be stored on a project. Note that, if you
+  are using the default commands, this should not be set to anything higher
+  than 7, as 4coder can only display 8 query bars, and one is already used
+  for the hints.
+* TLDPM_IMPLEMENT_COMMANDS - If this is defined, the custom commands listed
+  below are implemented. This is set up this way, so that you can define your
+  own variations without compiling commands you won't use, and other command
+  packs can utilize these commands if you _are_ using them.
+  
+Provided Commands:
+* tld_current_project_build
+* tld_current_project_save_and_build
+* tld_current_project_change_build_config
+* tld_current_project_save_and_change_build_config
+* tld_current_project_debug
+* tld_current_project_build_and_debug
+* tld_current_project_save_build_and_debug
+* tld_current_project_change_debug_config
+* tld_current_project_build_and_change_debug_config
+* tld_current_project_save_build_and_change_debug_config
+
+Note that, to use these commands, the global project has to be initialized. To
+do so, call tld_project_memory_init() before opening the project. I do this in
+start hook, but you could do this at pretty much any time.
 ******************************************************************************/
 #include "4tld_user_interface.h"
 
@@ -28,6 +89,7 @@ struct tld_Project {
     uint32_t debug_configurations_current;
 };
 
+// Parse a single line from a project file
 inline void
 tld_project_parse_line(tld_Project *project, char *line, int line_length, Partition *memory) {
     if (line_length <= 0) return;
@@ -84,6 +146,7 @@ tld_project_parse_line(tld_Project *project, char *line, int line_length, Partit
     }
 }
 
+// Parse a full project file from a buffer
 tld_Project
 tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partition *memory) {
     tld_Project result = {0};
@@ -126,12 +189,14 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
     return result;
 }
 
+// Reset the memory partition, and reuse it in parsing a new project
 tld_Project
 tld_project_reload_from_buffer(Application_Links *app, int32_t buffer_id, Partition *memory) {
     memory->pos = 0;
     return tld_project_load_from_buffer(app, buffer_id, memory);
 }
 
+// Open all source files as specified by the project file
 void tld_project_open_source_files(Application_Links *app, tld_Project *project, Partition *memory) {
     int32_t max_size = partition_remaining(memory);
     Temp_Memory temp = begin_temp_memory(memory);
@@ -181,6 +246,7 @@ void tld_project_open_source_files(Application_Links *app, tld_Project *project,
     }
 }
 
+// Build the project using the currently selected build configuration
 static bool32
 tld_project_build_current_config(Application_Links *app, tld_Project *project,
                                  Buffer_Identifier buffer, View_Summary *view)
@@ -191,6 +257,7 @@ tld_project_build_current_config(Application_Links *app, tld_Project *project,
                                CLI_OverlapWithConflict | CLI_CursorAtEnd);
 }
 
+// Run the currently selected debug configuration
 static bool32
 tld_project_debug_current_config(Application_Links *app, tld_Project *project,
                                  Buffer_Identifier buffer, View_Summary *view)
@@ -203,6 +270,7 @@ tld_project_debug_current_config(Application_Links *app, tld_Project *project,
 
 #ifdef TLDPM_IMPLEMENT_COMMANDS
 
+// The global project object and associated memory
 static tld_Project tld_current_project = {0};
 static void *__tld_current_project_memory_internal = {0};
 static Partition tld_current_project_memory = {0};
@@ -219,17 +287,21 @@ tld_get_home_directory(Application_Links *app, String *dest) {
 }
 #endif
 
+// Allocate the global project memory
 void tld_project_memory_init() {
     int32_t size = 8 * 1024;
     __tld_current_project_memory_internal = malloc(size);
     tld_current_project_memory = make_part(__tld_current_project_memory_internal, size);
 }
 
+// Free the global project memory
 void tld_project_memory_free() {
     free(__tld_current_project_memory_internal);
     tld_current_project_memory = {0};
 }
 
+// Build the project using the currently selected configuration,
+// with the output in the *build* buffer
 CUSTOM_COMMAND_SIG(tld_current_project_build) {
     if (!tld_current_project.working_directory.str) return;
     
@@ -243,11 +315,14 @@ CUSTOM_COMMAND_SIG(tld_current_project_build) {
     tld_project_build_current_config(app, &tld_current_project, buffer_id, &view);
 }
 
+// Save all dirty buffers, then build the project using the currently selected configuration,
+// with the output in the *build* buffer.
 CUSTOM_COMMAND_SIG(tld_current_project_save_and_build) {
     save_all_dirty_buffers(app);
     exec_command(app, tld_current_project_build);
 }
 
+// Select another build configuration to be used in future builds, then build the project
 CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
     if (!tld_current_project.build_configurations_count) return;
     
@@ -269,11 +344,14 @@ CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
     }
 }
 
+// Save all dirty buffers, then select another build configuration
+// to be used in future builds, then build the project
 CUSTOM_COMMAND_SIG(tld_current_project_save_and_change_build_config) {
     save_all_dirty_buffers(app);
     exec_command(app, tld_current_project_change_build_config);
 }
 
+// Run the currently selected debug configuration, with the output in the *debug* buffer
 CUSTOM_COMMAND_SIG(tld_current_project_debug) {
     if (!tld_current_project.working_directory.str) return;
     
@@ -287,6 +365,8 @@ CUSTOM_COMMAND_SIG(tld_current_project_debug) {
     tld_project_debug_current_config(app, &tld_current_project, buffer_id, &view);
 }
 
+// Build the project using the current configuration,
+// then run the currently selected debug configuration
 CUSTOM_COMMAND_SIG(tld_current_project_build_and_debug) {
     if (!tld_current_project.working_directory.str) return;
     
@@ -302,11 +382,14 @@ CUSTOM_COMMAND_SIG(tld_current_project_build_and_debug) {
     }
 }
 
+// Save all dirty buffers, then build the project using the current configuration,
+// then run the currently selected debug configuration
 CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_debug) {
     save_all_dirty_buffers(app);
     exec_command(app, tld_current_project_build_and_debug);
 }
 
+// Select another debug configuration to be used in future runs, then run
 CUSTOM_COMMAND_SIG(tld_current_project_change_debug_config) {
     if (!tld_current_project.debug_configurations_count) return;
     bool32 changed = tld_query_persistent_option(app, make_lit_string("Debug Configuration:"),
@@ -327,6 +410,8 @@ CUSTOM_COMMAND_SIG(tld_current_project_change_debug_config) {
     }
 }
 
+// Build the project using the current configuration,
+// then select another debug configuration to be used in future runs, then run
 CUSTOM_COMMAND_SIG(tld_current_project_build_and_change_debug_config) {
     if (!tld_current_project.working_directory.str) return;
     
@@ -342,6 +427,8 @@ CUSTOM_COMMAND_SIG(tld_current_project_build_and_change_debug_config) {
     }
 }
 
+// Save all dirty buffers, then build the project using the current configuration,
+// then select another debug configuration to be used in future runs, then run
 CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_change_debug_config) {
     save_all_dirty_buffers(app);
     exec_command(app, tld_current_project_build_and_change_debug_config);

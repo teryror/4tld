@@ -2,6 +2,50 @@
 File: 4tld_interactive_terminal.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or implied; use this code at your own risk.
+*******************************************************************************
+LICENSE
+
+This software is dual-licensed to the public domain and under the following
+license: you are granted a perpetual, irrevocable license to copy, modify,
+publish, and distribute this file as you see fit.
+*******************************************************************************
+This file provides a looped and improved version of the default execute_any_cli
+command. It includes a command history, which can be traversed with the up and
+down arrow keys, auto-completion of file paths, as well as other shortcuts to
+directly go to other interactive commands.
+
+The built-in commands the terminal understands:
+* cd   - Accepts a path relative to the working directory, sets the working
+  directory to it, and pretty prints the new working directory's contents.
+* home - Gets the working directory, sets the working directory to it, and
+  pretty prints its contents. Does not accept any arguments.
+* new  - Opens a new buffer with the specified file name, complaining if the
+  specified file already exists.
+* open - Opens the specified file in a new buffer, complaining if it does not
+  exist. Accepts a relative path as argument.
+* quit - Exits 4coder. Does not accept any arguments.
+
+Preprocessor Variables:
+* TLD_HOME_DIRECTORY - a flag designating whether the function
+  tld_get_home_directory(ApplicatioN_Links, String) is defined. This is used
+  to determine what directory to change to when executing the built-in
+  command `home`. If this is not defined, a default implementation is
+  provided. If you first include 4tld_project_management, the project's
+  working directory is used instead.
+* TLDFM_IMPLEMENT_COMMANDS - If this is defined, the terminal assumes that the
+  commands provided by 4tld_fuzzy_match.cpp are available, and will use them
+  instead.
+* TLDIT_IMPLEMENT_COMMANDS - If this is defined, the custom commands listed
+  below are implemented. This is set up this way, so that you can define your
+  own variations without compiling commands you won't use, and other command
+  packs can utilize these commands if you _are_ using them.
+* TLDIT_COMMAND_HISTORY_CAPACITY - The maximum number of commands that will be
+  stored in the command history. This defaults to 128.
+  Only used if you defined TLDIT_IMPLEMENT_COMMANDS. 
+  
+Provided Commands:
+* tld_terminal_begin_interactive_session
+* tld_terminal_single_command
 ******************************************************************************/
 #include "4tld_user_interface.h"
 
@@ -13,6 +57,7 @@ tld_get_home_directory(Application_Links *app, String *dest) {
 }
 #endif
 
+// Pretty prints a File_List to the specified buffer in two columns, with directories listed first.
 static void
 tld_iterm_print_file_list(Application_Links *app,
                           Buffer_Identifier buffer_id,
@@ -87,6 +132,9 @@ tld_iterm_print_file_list(Application_Links *app,
     }
 }
 
+// Split a command line into two parts, execute built-in commands,
+// or hand the full line of to exec_system_command.
+// Returns `true` if the interactive session should end after the command.
 static bool
 tld_iterm_handle_command(Application_Links *app,
                          View_Summary *view,
@@ -176,6 +224,7 @@ tld_iterm_handle_command(Application_Links *app,
 
 #endif
 
+// The custom query that combines auto-completion of file names and command history.
 static bool32
 tld_iterm_query_user_command(Application_Links *app,
                              Buffer_Identifier buffer, View_Summary *view,
@@ -256,6 +305,7 @@ static tld_StringHistory tld_iterm_command_history = {0};
 static char tld_iterm_working_directory_space[1024] = {0};
 static String tld_iterm_working_directory = {0};
 
+// Prepare the global state for a new terminal session.
 static void
 tld_iterm_init_session(Application_Links *app,
                        Buffer_Identifier *buffer, View_Summary *view,
@@ -295,6 +345,7 @@ tld_iterm_init_session(Application_Links *app,
     }
 }
 
+// The looped version of the command. Continue entering commands until the user hits ESC.
 CUSTOM_COMMAND_SIG(tld_terminal_begin_interactive_session) {
     View_Summary view;
     Buffer_Identifier buffer_id;
@@ -319,6 +370,7 @@ CUSTOM_COMMAND_SIG(tld_terminal_begin_interactive_session) {
     tld_iterm_working_directory = dir_bar.prompt;
 }
 
+// Query a single command and execute it.
 CUSTOM_COMMAND_SIG(tld_terminal_single_command) {
     View_Summary view;
     Buffer_Identifier buffer_id;

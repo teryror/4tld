@@ -2,6 +2,20 @@
 File: 4tld_find_and_replace.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or imlied; use this code at your own risk.
+*******************************************************************************
+LICENSE
+
+This software is dual-licensed to the public domain and under the following
+license: you are granted a perpetual, irrevocable license to copy, modify,
+publish, and distribute this file as you see fit.
+*******************************************************************************
+This file provides a non-incremental find and replace feature, more similar to
+what you find in graphical text editors, such as Visual Studio or even Notepad.
+
+Provided Commands:
+* tld_find_and_replace
+* tld_find_and_replace_selection
+* tld_find_and_replace_in_range
 ******************************************************************************/
 #include "4tld_user_interface.h"
 
@@ -12,6 +26,8 @@ struct tld_Search {
     bool case_sensitive;
 };
 
+// This massive function does pretty much all of the work;
+// it opens the search view, handles user input, and performs the actual searches.
 static void
 tld_find_and_replace_interactive(Application_Links *app, tld_Search *search_state, int32_t min, int32_t max) {
     View_Summary target_view = get_active_view(app, AccessAll);
@@ -308,10 +324,12 @@ tld_find_and_replace_interactive(Application_Links *app, tld_Search *search_stat
     }
 }
 
+// Global search state:
 static char tld_search_find_space[512];
 static char tld_search_replace_space[512];
 static tld_Search tld_search_state = {0};
 
+// Start searching the whole file with the global search state untouched.
 CUSTOM_COMMAND_SIG(tld_find_and_replace) {
     if (tld_search_state.find_what.str == 0 ||
         tld_search_state.replace_with.str == 0)
@@ -323,6 +341,7 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
     tld_find_and_replace_interactive(app, &tld_search_state, 0, 0);
 }
 
+// Reset the search state, and paste the content of the selected buffer range in the search bar.
 CUSTOM_COMMAND_SIG(tld_find_and_replace_selection) {
     tld_search_state = {0};
     tld_search_state.find_what = make_fixed_width_string(tld_search_find_space);
@@ -348,6 +367,7 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace_selection) {
     tld_find_and_replace_interactive(app, &tld_search_state, 0, 0);
 }
 
+// Limits the search to the selected range in the buffer.
 CUSTOM_COMMAND_SIG(tld_find_and_replace_in_range) {
     if (tld_search_state.find_what.str == 0 ||
         tld_search_state.replace_with.str == 0)
