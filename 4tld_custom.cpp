@@ -826,13 +826,14 @@ void set_key_maps(Bind_Helper *context) {
     // TODO: bind(context, key_f5, MDFR_SHIFT, git_add_current_file);
     bind(context, key_f7, MDFR_NONE, tld_current_project_save_and_build);
     bind(context, key_f7, MDFR_SHIFT, tld_current_project_save_and_change_build_config);
+    bind(context, key_f8, MDFR_NONE, tld_current_project_save_build_and_debug);
+    bind(context, key_f8, MDFR_SHIFT, tld_current_project_save_build_and_change_debug_config);
     bind(context, key_f11, MDFR_NONE, maximize_panel);
     
     // TODO: Unused key bindings
     bind(context, key_f3, MDFR_NONE, no_op);
     bind(context, key_f4, MDFR_NONE, no_op);
     bind(context, key_f6, MDFR_NONE, no_op);
-    bind(context, key_f8, MDFR_NONE, no_op);
     bind(context, key_f9, MDFR_NONE, no_op);
     bind(context, key_f10, MDFR_NONE, no_op);
     bind(context, key_f12, MDFR_NONE, no_op);
