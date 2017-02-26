@@ -128,11 +128,13 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
 // 
 
 static bool32
-tld_query_drop_down(Application_Links *app, String *strings,
-                    uint32_t count, uint32_t *selected_index)
+tld_query_persistent_option(Application_Links *app, String *strings,
+                            uint32_t count, uint32_t *selected_index)
 {
     bool32 result;
     Query_Bar items[7];
+    
+    uint32_t current_selection = *selected_index;
     
     for (int i = count - 1; i >= 0; --i) {
         items[i].prompt = make_lit_string("  ");
@@ -141,26 +143,26 @@ tld_query_drop_down(Application_Links *app, String *strings,
     }
     
     while (true) {
-        items[*selected_index].prompt = make_lit_string("* ");
+        items[current_selection].prompt = make_lit_string("* ");
         
         User_Input in = get_user_input(app, EventOnAnyKey, EventOnButton);
         if (in.abort || in.key.keycode == key_esc || in.key.keycode == 0) {
             result = false;
             break;
         } else if (in.key.keycode == key_up || in.key.keycode == 'i') {
-            items[*selected_index].prompt = make_lit_string("  ");
+            items[current_selection].prompt = make_lit_string("  ");
             
-            if (*selected_index == 0) {
-                *selected_index = count;
+            if (current_selection == 0) {
+                current_selection = count;
             }
             
-            *selected_index -= 1;
+            current_selection -= 1;
         } else if (in.key.keycode == key_down || in.key.keycode == 'k') {
-            items[*selected_index].prompt = make_lit_string("  ");
-            *selected_index += 1;
+            items[current_selection].prompt = make_lit_string("  ");
+            current_selection += 1;
             
-            if (*selected_index >= count) {
-                *selected_index = 0;
+            if (current_selection >= count) {
+                current_selection = 0;
             }
         } else if (in.key.keycode == '\n') {
             result = true;
@@ -170,6 +172,10 @@ tld_query_drop_down(Application_Links *app, String *strings,
     
     for (int i = count - 1; i >= 0; --i) {
         end_query_bar(app, &items[i], 0);
+    }
+    
+    if (result) {
+        *selected_index = current_selection;
     }
     
     return result;

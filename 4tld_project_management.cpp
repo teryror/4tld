@@ -198,13 +198,11 @@ CUSTOM_COMMAND_SIG(tld_current_project_save_and_build) {
 
 CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
     if (!tld_current_project.build_configurations_count) return;
-    unsigned int selected_index = tld_current_project.build_configurations_current;
-    bool32 changed = tld_query_drop_down(app, tld_current_project.build_configurations, 
-                                         tld_current_project.build_configurations_count,
-                                         &selected_index);
+    bool32 changed = tld_query_persistent_option(app, tld_current_project.build_configurations, 
+                                                 tld_current_project.build_configurations_count,
+                                                 &tld_current_project.build_configurations_current);
     
     if (changed) {
-        tld_current_project.build_configurations_current = selected_index;
         exec_command(app, tld_current_project_build);
     }
 }
@@ -242,13 +240,11 @@ CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_debug) {
 
 CUSTOM_COMMAND_SIG(tld_current_project_change_debug_config) {
     if (!tld_current_project.debug_configurations_count) return;
-    unsigned int selected_index = tld_current_project.debug_configurations_current;
-    bool32 changed = tld_query_drop_down(app, tld_current_project.debug_configurations,
-                                         tld_current_project.debug_configurations_count,
-                                         &selected_index);
+    bool32 changed = tld_query_persistent_option(app, tld_current_project.debug_configurations,
+                                                 tld_current_project.debug_configurations_count,
+                                                 &tld_current_project.debug_configurations_current);
     
     if (changed) {
-        tld_current_project.debug_configurations_current = selected_index;
         exec_command(app, tld_current_project_debug);
     }
 }
