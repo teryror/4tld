@@ -774,7 +774,7 @@ get_file_settings(Application_Links *app, Buffer_Summary *buffer) {
             buffer_set_setting(app, buffer, BufferSetting_WrapLine, false);
             buffer_set_setting(app, buffer, BufferSetting_VirtualWhitespace, false);
         } else if (match_ss(ext, make_lit_string("4proj"))) {
-            tld_current_project = tld_project_load_from_buffer(app, buffer->buffer_id, &tld_current_project_memory);
+            tld_current_project = tld_project_reload_from_buffer(app, buffer->buffer_id, &tld_current_project_memory);
             tld_project_open_source_files(app, &tld_current_project, &tld_current_project_memory);
         } else {
             buffer_set_setting(app, buffer, BufferSetting_Lex, false);

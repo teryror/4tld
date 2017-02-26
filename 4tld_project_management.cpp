@@ -90,16 +90,16 @@ struct tld_Project {
 };
 
 // Parse a single line from a project file
-inline void
+inline bool32
 tld_project_parse_line(tld_Project *project, char *line, int line_length, Partition *memory) {
-    if (line_length <= 0) return;
+    if (line_length <= 0) return true;
     
     char *line_end = line + line_length;
     while (line < line_end && (*line == ' ' || *line == '\t')) {
         ++line;
     }
     
-    if (line < line_end && *line == '#') return;
+    if (line < line_end && *line == '#') return true;
     
     char *ident = line;
     while (line < line_end && (*line != ' ' && *line != '\t')) {
@@ -119,31 +119,47 @@ tld_project_parse_line(tld_Project *project, char *line, int line_length, Partit
         new_source_file.str = (char *)partition_allocate(memory, content_length);
         new_source_file.memory_size = content_length;
         
-        copy_partial_ss(&new_source_file, make_string(line, content_length));
-        
-        project->source_files[project->source_files_count] = new_source_file;
-        project->source_files_count += 1;
+        if (new_source_file.str) {
+            copy_partial_ss(&new_source_file, make_string(line, content_length));
+            
+            project->source_files[project->source_files_count] = new_source_file;
+            project->source_files_count += 1;
+        } else {
+            return false;
+        }
     } else if (match_sc(make_string(ident, ident_length), "build.config") &&
                project->build_configurations_count < TLDPM_CONFIGURATIONS_CAPACITY) {
         String new_build_config;
         new_build_config.str = (char *)partition_allocate(memory, content_length);
         new_build_config.memory_size = content_length;
         
-        copy_partial_ss(&new_build_config, make_string(line, content_length));
+        if (new_build_config.str) {
+            copy_partial_ss(&new_build_config, make_string(line, content_length));
+            
+            project->build_configurations[project->build_configurations_count] = new_build_config;
+            project->build_configurations_count += 1;
+        } else {
+            return false;
+        }
         
-        project->build_configurations[project->build_configurations_count] = new_build_config;
-        project->build_configurations_count += 1;
     } else if (match_sc(make_string(ident, ident_length), "debug.config") &&
                project->debug_configurations_count < TLDPM_CONFIGURATIONS_CAPACITY) {
         String new_debug_config;
         new_debug_config.str = (char *)partition_allocate(memory, content_length);
         new_debug_config.memory_size = content_length;
         
-        copy_partial_ss(&new_debug_config, make_string(line, content_length));
+        if (new_debug_config.str) {
+            copy_partial_ss(&new_debug_config, make_string(line, content_length));
+            
+            project->debug_configurations[project->debug_configurations_count] = new_debug_config;
+            project->debug_configurations_count += 1;
+        } else {
+            return false;
+        }
         
-        project->debug_configurations[project->debug_configurations_count] = new_debug_config;
-        project->debug_configurations_count += 1;
     }
+    
+    return true;
 }
 
 // Parse a full project file from a buffer
@@ -158,6 +174,10 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
     String working_directory_copy;
     working_directory_copy.str = (char *)partition_allocate(memory, result.working_directory.size);
     working_directory_copy.memory_size = result.working_directory.size;
+    if (!working_directory_copy.str) {
+        tld_show_error("Out of project memory -- failed to load project!");
+        return {0};
+    }
     copy_partial_ss(&working_directory_copy, result.working_directory);
     result.working_directory = working_directory_copy;
     
@@ -167,6 +187,8 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
     int chunk_size = sizeof(chunk);
     Stream_Chunk stream = {0};
     
+    bool32 success = true;
+    
     if (init_stream_chunk(&stream, app, &buffer, pos, chunk, chunk_size)) {
         do {
             for (; pos < stream.end; ++pos) {
@@ -174,7 +196,8 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
                     buffer_read_range(app, &buffer, beginning_of_line, pos, current_line);
                     int current_line_length = pos - beginning_of_line;
                     
-                    tld_project_parse_line(&result, current_line, current_line_length, memory);
+                    success &= tld_project_parse_line(&result, current_line,
+                                                      current_line_length, memory);
                     
                     beginning_of_line = pos + 1;
                 }
@@ -184,6 +207,10 @@ tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partitio
         buffer_read_range(app, &buffer, beginning_of_line, pos, current_line);
         int current_line_length = pos - beginning_of_line;
         tld_project_parse_line(&result, current_line, current_line_length, memory);
+    }
+    
+    if (!success) {
+        tld_show_warning("Out of project memory -- some features may not work as configured.");
     }
     
     return result;
