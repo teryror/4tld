@@ -127,6 +127,54 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
 // REGION(Query_Bars)
 // 
 
+static bool32
+tld_query_drop_down(Application_Links *app, String *strings,
+                    uint32_t count, uint32_t *selected_index)
+{
+    bool32 result;
+    Query_Bar items[7];
+    
+    for (int i = count - 1; i >= 0; --i) {
+        items[i].prompt = make_lit_string("  ");
+        items[i].string = strings[i];
+        start_query_bar(app, &items[i], 0);
+    }
+    
+    while (true) {
+        items[*selected_index].prompt = make_lit_string("* ");
+        
+        User_Input in = get_user_input(app, EventOnAnyKey, EventOnButton);
+        if (in.abort || in.key.keycode == key_esc || in.key.keycode == 0) {
+            result = false;
+            break;
+        } else if (in.key.keycode == key_up || in.key.keycode == 'i') {
+            items[*selected_index].prompt = make_lit_string("  ");
+            
+            if (*selected_index == 0) {
+                *selected_index = count;
+            }
+            
+            *selected_index -= 1;
+        } else if (in.key.keycode == key_down || in.key.keycode == 'k') {
+            items[*selected_index].prompt = make_lit_string("  ");
+            *selected_index += 1;
+            
+            if (*selected_index >= count) {
+                *selected_index = 0;
+            }
+        } else if (in.key.keycode == '\n') {
+            result = true;
+            break;
+        }
+    }
+    
+    for (int i = count - 1; i >= 0; --i) {
+        end_query_bar(app, &items[i], 0);
+    }
+    
+    return result;
+}
+
 struct tld_StringHistory {
     String* strings;
     int32_t size;

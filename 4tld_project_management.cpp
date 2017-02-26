@@ -198,44 +198,14 @@ CUSTOM_COMMAND_SIG(tld_current_project_save_and_build) {
 
 CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
     if (!tld_current_project.build_configurations_count) return;
-    
-    Query_Bar build_configurations[TLDPM_CONFIGURATIONS_CAPACITY];
-    
-    for (int i = tld_current_project.build_configurations_count - 1; i >= 0; --i) {
-        build_configurations[i].prompt = make_lit_string("  ");
-        build_configurations[i].string = tld_current_project.build_configurations[i];
-        start_query_bar(app, &build_configurations[i], false);
-    }
-    
     unsigned int selected_index = tld_current_project.build_configurations_current;
+    bool32 changed = tld_query_drop_down(app, tld_current_project.build_configurations, 
+                                         tld_current_project.build_configurations_count,
+                                         &selected_index);
     
-    while (true) {
-        build_configurations[selected_index].prompt = make_lit_string("* ");
-        
-        User_Input in = get_user_input(app, EventOnAnyKey, EventOnButton);
-        if (in.abort || in.key.keycode == key_esc || in.key.keycode == 0) {
-            return;
-        } else if (in.key.keycode == key_up || in.key.keycode == 'i') {
-            build_configurations[selected_index].prompt = make_lit_string("  ");
-            
-            if (selected_index == 0) {
-                selected_index = tld_current_project.build_configurations_count;
-            }
-            
-            --selected_index;
-        } else if (in.key.keycode == key_down || in.key.keycode == 'k') {
-            build_configurations[selected_index].prompt = make_lit_string("  ");
-            ++selected_index;
-            
-            if (selected_index >= tld_current_project.build_configurations_count) {
-                selected_index = 0;
-            }
-        } else if (in.key.keycode == '\n') {
-            tld_current_project.build_configurations_current = selected_index;
-            exec_command(app, tld_current_project_build);
-            
-            return;
-        }
+    if (changed) {
+        tld_current_project.build_configurations_current = selected_index;
+        exec_command(app, tld_current_project_build);
     }
 }
 
@@ -272,44 +242,14 @@ CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_debug) {
 
 CUSTOM_COMMAND_SIG(tld_current_project_change_debug_config) {
     if (!tld_current_project.debug_configurations_count) return;
-    
-    Query_Bar debug_configurations[TLDPM_CONFIGURATIONS_CAPACITY];
-    
-    for (int i = tld_current_project.debug_configurations_count - 1; i >= 0; --i) {
-        debug_configurations[i].prompt = make_lit_string("  ");
-        debug_configurations[i].string = tld_current_project.debug_configurations[i];
-        start_query_bar(app, &debug_configurations[i], false);
-    }
-    
     unsigned int selected_index = tld_current_project.debug_configurations_current;
+    bool32 changed = tld_query_drop_down(app, tld_current_project.debug_configurations,
+                                         tld_current_project.debug_configurations_count,
+                                         &selected_index);
     
-    while (true) {
-        debug_configurations[selected_index].prompt = make_lit_string("* ");
-        
-        User_Input in = get_user_input(app, EventOnAnyKey, EventOnButton);
-        if (in.abort || in.key.keycode == key_esc || in.key.keycode == 0) {
-            return;
-        } else if (in.key.keycode == key_up || in.key.keycode == 'i') {
-            debug_configurations[selected_index].prompt = make_lit_string("  ");
-            
-            if (selected_index == 0) {
-                selected_index = tld_current_project.debug_configurations_count;
-            }
-            
-            --selected_index;
-        } else if (in.key.keycode == key_down || in.key.keycode == 'k') {
-            debug_configurations[selected_index].prompt = make_lit_string("  ");
-            ++selected_index;
-            
-            if (selected_index >= tld_current_project.debug_configurations_count) {
-                selected_index = 0;
-            }
-        } else if (in.key.keycode == '\n') {
-            tld_current_project.debug_configurations_current = selected_index;
-            exec_command(app, tld_current_project_debug);
-            
-            return;
-        }
+    if (changed) {
+        tld_current_project.debug_configurations_current = selected_index;
+        exec_command(app, tld_current_project_debug);
     }
 }
 
