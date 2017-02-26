@@ -5,25 +5,27 @@ Notice: No warranty is offered or implied; use this code at your own risk.
 ******************************************************************************/
 #include "4tld_user_interface.h"
 
+#ifndef TLDPM_SOURCE_FILES_CAPACITY
+#define TLDPM_SOURCE_FILES_CAPACITY 16
+#endif
+
 #ifndef TLDPM_CONFIGURATIONS_CAPACITY
 #define TLDPM_CONFIGURATIONS_CAPACITY 7
 #endif
 
-#ifndef TLDPM_SOURCE_EXTENSIONS
-#define TLDPM_SOURCE_EXTENSIONS { "cpp", "hpp", "c", "h", "cc", "rs" }
-#endif
-
 struct tld_Project {
     String working_directory;
-    String source_directory;
     
-    String       build_configurations[TLDPM_CONFIGURATIONS_CAPACITY];
-    unsigned int build_configurations_count;
-    unsigned int build_configurations_current;
+    String   source_files[TLDPM_SOURCE_FILES_CAPACITY];
+    uint32_t source_files_count;
     
-    String       debug_configurations[TLDPM_CONFIGURATIONS_CAPACITY];
-    unsigned int debug_configurations_count;
-    unsigned int debug_configurations_current;
+    String   build_configurations[TLDPM_CONFIGURATIONS_CAPACITY];
+    uint32_t build_configurations_count;
+    uint32_t build_configurations_current;
+    
+    String   debug_configurations[TLDPM_CONFIGURATIONS_CAPACITY];
+    uint32_t debug_configurations_count;
+    uint32_t debug_configurations_current;
 };
 
 inline void
@@ -49,11 +51,16 @@ tld_project_parse_line(tld_Project *project, char *line, int line_length, Partit
     
     int content_length = (int)(line_end - line);
     
-    if (match_sc(make_string(ident, ident_length), "source.dir")) {
-        project->source_directory.str = (char *)partition_allocate(memory, content_length);
-        project->source_directory.memory_size = content_length;
+    if (match_sc(make_string(ident, ident_length), "source.file") &&
+        project->source_files_count < TLDPM_SOURCE_FILES_CAPACITY) {
+        String new_source_file;
+        new_source_file.str = (char *)partition_allocate(memory, content_length);
+        new_source_file.memory_size = content_length;
         
-        copy_partial_ss(&project->source_directory, make_string(line, content_length));
+        copy_partial_ss(&new_source_file, make_string(line, content_length));
+        
+        project->source_files[project->source_files_count] = new_source_file;
+        project->source_files_count += 1;
     } else if (match_sc(make_string(ident, ident_length), "build.config") &&
                project->build_configurations_count < TLDPM_CONFIGURATIONS_CAPACITY) {
         String new_build_config;
@@ -126,24 +133,52 @@ tld_project_reload_from_buffer(Application_Links *app, int32_t buffer_id, Partit
 }
 
 void tld_project_open_source_files(Application_Links *app, tld_Project *project, Partition *memory) {
-    char *extension_list[] = TLDPM_SOURCE_EXTENSIONS;
-    int32_t extension_count = sizeof(extension_list) / sizeof(extension_list[0]);
-    
     int32_t max_size = partition_remaining(memory);
     Temp_Memory temp = begin_temp_memory(memory);
     char *scratch_space = push_array(memory, char, max_size);
     
     String dir = make_string_cap(scratch_space, 0, max_size);
     append_ss(&dir, project->working_directory);
-    if (project->source_directory.str) {
-        // TODO(Polish): Get directory_cd to work
-        // it only seems to work with literal("..") as the relative path
-        
-        tld_change_directory(&dir, project->source_directory);
-    }
     
-    open_all_files_with_extension_internal(app, dir, extension_list, extension_count, false);
-    end_temp_memory(temp);
+    for (unsigned int i = 0; i < project->source_files_count; ++i) {
+        String specified_file = project->source_files[i];
+        String file_name = front_of_directory(specified_file);
+        int32_t prefix_len = find_s_char(file_name, 0, '*');
+        
+        if (prefix_len < specified_file.size) {
+            // NOTE: Wildcarded string
+            tld_change_directory(&dir, path_of_directory(specified_file));
+            
+            String prefix = make_string(file_name.str, prefix_len);
+            String suffix = make_string(file_name.str  + prefix_len + 1,
+                                        file_name.size - prefix_len - 1);
+            
+            File_List all_files = get_file_list(app, expand_str(dir));
+            for (int j = 0; j < all_files.count; ++j) {
+                File_Info next_file = all_files.infos[j];
+                if (next_file.folder) continue;
+                
+                String next_file_name = make_string(next_file.filename, next_file.filename_len);
+                String next_file_name_end = make_string(next_file_name.str + next_file_name.size - suffix.size, suffix.size);
+                
+                if (match_part_insensitive_ss(next_file_name, prefix) &&
+                    match_insensitive_ss(next_file_name_end, suffix))
+                {
+                    int32_t dir_old_size = dir.size;
+                    append_ss(&dir, next_file_name);
+                    open_file(app, 0, expand_str(dir), true, false);
+                    dir.size = dir_old_size;
+                }
+            }
+            free_file_list(app, all_files);
+        } else {
+            // NOTE: Normal file name
+            append_ss(&dir, specified_file);
+            open_file(app, 0, expand_str(dir), true, false);
+        }
+        
+        dir.size = project->working_directory.size;
+    }
 }
 
 static bool32
