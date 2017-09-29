@@ -1,5 +1,4 @@
 /******************************************************************************
-File: 4tld_user_interface.h
 Author: Tristan Dannenberg
 Notice: No warranty is offered or implied; use this code at your own risk.
 *******************************************************************************
@@ -9,83 +8,98 @@ This software is dual-licensed to the public domain and under the following
 license: you are granted a perpetual, irrevocable license to copy, modify,
 publish, and distribute this file as you see fit.
 *******************************************************************************
-This file hosts the maximum amount of user interface code shared between
-multiple command packs. I'm not a great API designer, so this may not actually
-allow you to build similar interfaces faster, this is mostly so that I can
-change the behaviour of similar UI elements in one step.
+This file hosts the user interface code shared between the command packs.
+Note that, because of the nature of this file, most command packs #include it,
+making this a strict dependency no matter which one you're using.
 
-Note that, because of the nature of this file, most drop-in command packs
-#include this file, so this is a strict dependency, no matter which one you're
-using.
+Preprocessor Variables:
+* TLD_USER_INTERFACE_H is the include guard
+* TLDUI_MAX_PATTERN_SIZE is the maximum length the fuzzy matcher supports. This
+  defaults to 64, which is the highest valid value. Using other values is not
+  recommended, but possible.
+* TLDUI_TRANSPOSE_PATTERNS is not defined by default. If this macro is defined,
+  tldui_query_fuzzy_list will try a number of transpositions of each string,
+  yielding larger result sets and resistance to typos in the pattern, at the
+  cost of a noticeable performance drop when querying large lists.
 ******************************************************************************/
-#ifndef FTLD_USER_INTERFACE_H
-#define FTLD_USER_INTERFACE_H
+#ifndef TLD_USER_INTERFACE_H
+#define TLD_USER_INTERFACE_H
 
-// NOTE: This is only needed because directory_cd(6) is broken...
-// This should be removed when a 4coder update fixes this bug,
-// therefore it was placed in this file, despite not really fitting in
-static bool
-tld_change_directory(String *dir, String rel_path) {
-    bool success = false;
-    
-    String _dir;
-    _dir.str         = (char *) malloc(dir->memory_size);
-    _dir.size        = 0;
-    _dir.memory_size = dir->memory_size;
-    
-    append_ss(&_dir, *dir);
-    
-    while (rel_path.size > 0) {
-        String rel_path_element;
-        rel_path_element.str = rel_path.str;
-        rel_path_element.size = 0;
-        
-        while (rel_path.str[rel_path_element.size] != '/' &&
-               rel_path.str[rel_path_element.size] != '\\' &&
-               rel_path_element.size < rel_path.size)
-        {
-            ++rel_path_element.size;
-        }
-        
-        if (rel_path_element.size == rel_path.size) {
-            rel_path.size = 0;
-        } else {
-            rel_path.str += rel_path_element.size + 1;
-            rel_path.size -= rel_path_element.size + 1;
-        }
-        
-        if (match_sc(rel_path_element, "..")) {
-            if (_dir.size > 0 && (_dir.str[_dir.size - 1] == '/' ||
-                                  _dir.str[_dir.size - 1] == '\\'))
-            {
-                _dir.size -= 1;
-            }
-            _dir = path_of_directory(_dir);
-        } else if (match_sc(rel_path_element, ".")) {
-            // Do nothing -- we're already in the current directory
-        } else {
-            append_ss(&_dir, rel_path_element);
-            append_s_char(&_dir, '/');
-        }
+static inline Buffer_Summary
+tldui_get_empty_buffer_by_name(Application_Links *app,
+                               char * buffer_name, int32_t buffer_name_len,
+                               bool32 unimportant, bool32 read_only,
+                               Access_Flag access)
+{
+    Buffer_Summary result = get_buffer_by_name(app, buffer_name, buffer_name_len, access);
+    if (!result.exists) {
+        result = create_buffer(app, buffer_name, buffer_name_len, BufferCreate_AlwaysNew);
+    } else {
+        buffer_send_end_signal(app, &result);
+        buffer_replace_range(app, &result, 0, result.size, 0, 0);
     }
     
-    /* file_exists() returns false on directories,
-     * and I don't want to write OS specific code here,
-     * though this does make the cd command kind of annoying...
-    if (file_exists(app, expand_str(_dir))) */
-    {
-        success = true;
-        
-        dir->size = 0;
-        append_ss(dir, _dir);
-    }
+    Assert(result.exists);
+    buffer_set_setting(app, &result, BufferSetting_Unimportant, unimportant);
+    buffer_set_setting(app, &result, BufferSetting_ReadOnly, read_only);
     
-    free(_dir.str);
-    return success;
+    return result;
 }
 
-// Displays a buffer with the specified name, no matter what.
-// Intended for use by commands requiring special buffers.
+static inline View_Summary
+tldui_display_buffer(Application_Links *app, Buffer_ID buffer, bool prefer_inactive_view) 
+{
+    int view_count = 0;
+    for (View_Summary v = get_view_first(app, AccessAll);
+         v.exists; get_view_next(app, &v, AccessAll))
+    {
+        if (v.buffer_id == buffer) {
+            set_active_view(app, &v);
+            return v;
+        } else {
+            view_count += 1;
+        }
+    }
+    
+    View_Summary result = get_active_view(app, AccessAll);
+    if (view_count > 1) {
+        if (prefer_inactive_view) {
+            get_view_next(app, &result, AccessAll);
+            if (!result.exists) {
+                result = get_view_first(app, AccessAll);
+            }
+            
+            set_active_view(app, &result);
+        }
+    } else if (prefer_inactive_view) {
+        open_view(app, &result, ViewSplit_Right);
+        view_set_setting(app, &result, ViewSetting_ShowScrollbar, false);
+    }
+    
+    view_set_buffer(app, &result, buffer, 0);
+    return result;
+}
+
+static inline View_Summary
+tldui_display_buffer_temp(Application_Links *app, View_Summary * base_view,
+                          float split_proportion, View_Split_Position split_direction,
+                          bool show_file_bar, Buffer_ID buffer)
+{
+    View_Summary result = open_view(app, base_view, split_direction);
+    
+    view_set_split_proportion(app, &result, split_proportion);
+    
+    view_set_setting(app, &result, ViewSetting_ShowScrollbar, false);
+    view_set_setting(app, &result, ViewSetting_ShowFileBar, show_file_bar);
+    
+    view_set_buffer(app, &result, buffer, 0);
+    return result;
+}
+
+// 
+// Panel Management
+// 
+
 void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
                                 Buffer_Summary *buffer, View_Summary *view,
                                 bool prefer_inactive_view, Access_Flag access)
@@ -104,20 +118,20 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
         buffer_creation_name(app, &data, expand_str(buffer_name), 0);
         *buffer = end_buffer_creation(app, &data);
         
-        buffer_set_setting(app, buffer, BufferSetting_WrapLine, true);
-        buffer_set_setting(app, buffer, BufferSetting_WrapPosition, 950);
         buffer_set_setting(app, buffer, BufferSetting_Unimportant, true);
         buffer_set_setting(app, buffer, BufferSetting_ReadOnly, true);
     }
     
     int view_count = 0;
     for (View_Summary v = get_view_first(app, AccessAll);
-         v.exists; get_view_next(app, &v, AccessAll)) {
+         v.exists; get_view_next(app, &v, AccessAll))
+    {
         if (v.buffer_id == buffer->buffer_id) {
             *view = v;
             set_active_view(app, view);
             return;
         }
+        
         ++view_count;
     }
     
@@ -135,280 +149,308 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
         *view = open_view(app, view, ViewSplit_Right);
         view_set_setting(app, view, ViewSetting_ShowScrollbar, false);
     }
+    
     view_set_buffer(app, view, buffer->buffer_id, 0);
 }
 
 // 
-// REGION(Query_Bars)
+// Fuzzy String Matching
 // 
 
-// Presents the user with up to seven Strings to choose from, with the assumption
-// that the selected option (or rather, its index in the array) is persistent.
-// The selected option is marked with a star, pressing ESC leaves it untouched.
-static bool32
-tld_query_persistent_option(Application_Links *app, String hint, String *strings,
-                            uint32_t count, uint32_t *selected_index)
-{
-    Assert(count <= 7);
-    
-    bool32 result;
-    Query_Bar items[7];
-    
-    uint32_t current_selection = *selected_index;
-    
-    for (int i = count - 1; i >= 0; --i) {
-        items[i].prompt = make_lit_string("  ");
-        items[i].string = strings[i];
-        start_query_bar(app, &items[i], 0);
+#ifndef TLDUI_MAX_PATTERN_SIZE
+#define TLDUI_MAX_PATTERN_SIZE 64
+#endif
+
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+#ifndef max
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
+static inline b32_4tech
+tld_char_is_separator(char a) {
+    return (a == ' ' || a == '_' || a == '-' ||
+            a == '.' || a == '/' || a == '\\');
+}
+
+static inline b32_4tech
+tld_fuzzy_match_char(char a, char b) {
+    return ((char_to_lower(a) == char_to_lower(b)) ||
+            (a == ' ' && tld_char_is_separator(b)));
+}
+
+// This is where the magic happens
+static int32_t
+tld_fuzzy_match_ss(String pattern, String val) {
+    if (pattern.size == 0) {
+        return 1;
     }
     
-    Query_Bar hint_bar = {0};
-    hint_bar.prompt = hint;
-    start_query_bar(app, &hint_bar, 0);
+    // Optimization 1: Skip table rows
+    int j = 0;
+    while (j < val.size && !tld_fuzzy_match_char(pattern.str[0], val.str[j])) {
+        j++;
+    }
     
-    while (true) {
-        items[current_selection].prompt = make_lit_string("* ");
+    if (val.size - j < pattern.size) {
+        return 0;
+    }
+    
+    int32_t row[TLDUI_MAX_PATTERN_SIZE] = {0}; // Current row of scores table
+    int32_t lml[TLDUI_MAX_PATTERN_SIZE] = {0}; // Current row of auxiliary table (match lengths)
+    
+    int j_lo = j;
+    
+    for (; j < val.size; ++j) {
+        int32_t diag = 1;
+        int32_t diag_l = 0;
         
-        User_Input in = get_user_input(app, EventOnAnyKey, EventOnButton);
-        if (in.abort || in.key.keycode == key_esc || in.key.keycode == 0) {
-            result = false;
-            break;
-        } else if (in.key.keycode == key_up || in.key.keycode == 'i') {
-            items[current_selection].prompt = make_lit_string("  ");
+        // Optimization 2: Skip triangular table sections that don't affect the result
+        int i_lo = max(j + pattern.size - val.size, 0);
+        int i_hi = min(j - j_lo + 1, pattern.size);
+        
+        if (i_lo > 0) {
+            diag = row[i_lo - 1];
+            diag_l = lml[i_lo - 1];
+        }
+        
+        for (int i = i_lo; i < i_hi; ++i) {
+            int32_t row_old = row[i];
+            int32_t lml_old = lml[i];
             
-            if (current_selection == 0) {
-                current_selection = count;
+            int32_t match = tld_fuzzy_match_char(pattern.str[i], val.str[j]);
+            lml[i] = match * (diag_l + 1);
+            
+            if (diag > 0 && match) {
+                // Sequential match bonus:
+                int32_t value = lml[i];
+                
+                if (j == 0 || (char_is_lower(val.str[j - 1]) && char_is_upper(val.str[j])) ||
+                    tld_char_is_separator(val.str[j - 1]))
+                {   // Abbreviation bonus:
+                    value += 4;
+                }
+                
+                row[i] = max(diag + value, row[i]);
             }
             
-            current_selection -= 1;
-        } else if (in.key.keycode == key_down || in.key.keycode == 'k') {
-            items[current_selection].prompt = make_lit_string("  ");
-            current_selection += 1;
-            
-            if (current_selection >= count) {
-                current_selection = 0;
-            }
-        } else if (in.key.keycode == '\n') {
-            result = true;
-            break;
+            diag = row_old;
+            diag_l = lml_old;
         }
     }
     
-    for (int i = count - 1; i >= 0; --i) {
-        end_query_bar(app, &items[i], 0);
-    }
-    end_query_bar(app, &hint_bar, 0);
-    
-    if (result) {
-        *selected_index = current_selection;
-    }
-    
-    return result;
+    return row[pattern.size - 1];
 }
 
-// A ring buffer of strings
-struct tld_StringHistory {
-    String* strings;
-    int32_t size;
-    int32_t offset;
-    int32_t capacity;
+// A string that tracks whether it matched patterns of a given length
+struct tldui_string {
+    String value;
+    // The length of the longest prefix of the current pattern this string matched
+    uint64_t matched_pattern_prefix_length;
 };
 
-// Pushes a new string into the history and deletes the oldest one if necessary.
+// Query a user for a pattern to search the list with, show the top 7 results
+// (or fewer, if not enough strings match the pattern, even with a low score).
+// Navigate the result list with the arrow keys, press enter to accept the
+// selected string.
 // 
-// NOTE: This does ALL the memory management, so do not copy string pointers out of
-// the history unless you are certain you're not pushing anything else during the
-// copy's lifetime.
-static void
-tld_string_history_push(tld_StringHistory *history, String value) {
-    int32_t offset = (history->size + history->offset) % history->capacity;
-    
-    if (history->strings[offset].str) {
-        free(history->strings[offset].str);
-    }
-    
-    history->strings[offset] = {0};
-    history->strings[offset].str = (char *) malloc(value.size);
-    history->strings[offset].memory_size = value.size;
-    copy_partial_ss(&history->strings[offset], value);
-    
-    if (history->size < history->capacity) {
-        ++history->size;
-    } else {
-        history->offset += 1;
-        history->offset %= history->capacity;
-    }
-}
-
-// Replaces the text in the string with a string from the history.
-// This is for use inside a query_user_string type function, NOT a full implementation itself.
-static void
-tld_query_traverse_history(User_Input in,
-                           char keycode_older,
-                           char keycode_newer,
-                           String *bar_string,
-                           tld_StringHistory *history,
-                           int32_t *history_index)
-{
-    if (in.abort) return;
-    if (history->size <= 0) return;
-    
-    if (in.type == UserInputKey) {
-        if (in.key.keycode == keycode_older) {
-            int32_t _index = (*history_index + history->offset) % history->capacity;
-            bar_string->size = 0;
-            append_partial_ss(bar_string, history->strings[_index]);
-            
-            if (*history_index > 0)
-                *history_index -= 1;
-        } else if (in.key.keycode == keycode_newer) {
-            bar_string->size = 0;
-            if (*history_index + 1 < history->size) {
-                *history_index += 1;
-                
-                int32_t _index = (*history_index + history->offset) % history->capacity;
-                append_partial_ss(bar_string, history->strings[_index]);
-            }
-        }
-    }
-}
-
-// Autocompletes filenames of files in the specified work_dir and its subdirectories.
-// This is for use inside a query_user_string type function, NOT a full implementation itself.
-static void
-tld_query_complete_filenames(Application_Links *app, User_Input *in, char keycode, String *bar_string, File_List *file_list, String work_dir)
-{
-    if (in->abort) return;
-    
-    if (in->type == UserInputKey && in->key.keycode == keycode) {
-        Range incomplete_string = {0};
-        incomplete_string.max = bar_string->size;
-        incomplete_string.min = incomplete_string.max - 1;
-        bool in_work_dir = true;
-        
-        while (incomplete_string.min >= 0 &&
-               bar_string->str[incomplete_string.min] != ' ' &&
-               bar_string->str[incomplete_string.min] != '\t')
-        {
-            if (bar_string->str[incomplete_string.min] == '/' ||
-                bar_string->str[incomplete_string.min] == '\\')
-            {
-                in_work_dir = false;
-            }
-            --incomplete_string.min;
-        }
-        ++incomplete_string.min;
-        
-        String prefix = *bar_string;
-        prefix.str += incomplete_string.min;
-        prefix.size = incomplete_string.max - incomplete_string.min;
-        
-        File_List files;
-        if (in_work_dir) {
-            files = *file_list;
-        } else {
-            char other_dir_space[1024];
-            String other_dir = make_fixed_width_string(other_dir_space);
-            append_ss(&other_dir, work_dir);
-            tld_change_directory(&other_dir, path_of_directory(prefix));
-            prefix = front_of_directory(prefix);
-            
-            files = get_file_list(app, expand_str(other_dir));
-        }
-        
-        int32_t file_index = -1;
-        while (in->type == UserInputKey && in->key.keycode == keycode) {
-            if (in->key.modifiers[MDFR_NONE]) { // NOTE: This seems to be either a bug with 4coder, or an error in the 4coder_API headers, as this is 1 if _shift_ is held...?
-                if (file_index < 0) {
-                    file_index = files.count;
-                }
-                
-                for (--file_index; file_index >= 0; --file_index) {
-                    if (match_part_insensitive_cs(files.infos[file_index].filename, prefix)) {
-                        break;
-                    }
-                }
-            } else {
-                for (++file_index; file_index < files.count; ++file_index) {
-                    if (match_part_insensitive_cs(files.infos[file_index].filename, prefix)) {
-                        break;
-                    }
-                }
-            }
-            
-            bar_string->size = incomplete_string.max;
-            if (file_index >= 0 && file_index < files.count) {
-                append_ss(bar_string, make_string(files.infos[file_index].filename + prefix.size, files.infos[file_index].filename_len - prefix.size));
-            } else if (file_index >= files.count) {
-                file_index = -1;
-            } else if (file_index < 0) {
-                file_index = files.count;
-            } else {
-                // NOTE: Unreachable
-                Assert(false);
-            }
-            
-            *in = get_user_input(app, EventOnAnyKey, EventOnEsc);
-        }
-        
-        if (!in_work_dir) {
-            free_file_list(app, files);
-        }
-    }
-}
-
-// Allow the user to reenter a string into an already open query bar.
-// Note that start_query_bar has to be called before this function.
+// Returns the index of the selected string in the provided string list,
+// or -1 if the query was canceled with ESC.
 static int32_t
-tld_requery_user_string(Application_Links *app, Query_Bar *bar) {
-    User_Input in;
-    int32_t success = 1;
-    int32_t good_character = 0;
+tldui_query_fuzzy_list(Application_Links *app,
+                       Query_Bar *search_bar,
+                       tldui_string *list,
+                       int32_t list_count)
+{
+    int32_t result_indices[7];
+    
+    String empty = make_lit_string("");
+    Query_Bar result_bars[ArrayCount(result_indices)] = {0};
+    for (int i = 0; i < ArrayCount(result_indices); ++i) {
+        result_bars[i].string = empty;
+        result_bars[i].prompt = empty;
+    }
+    
+    int result_count = 0;
+    int result_selected_index = 0;
+    bool full_rescan = true;
+    int current_min = 0;
+    bool search_key_changed = true;
+    bool selected_index_changed = true;
     
     while (true) {
-        in = get_user_input(app, EventOnAnyKey, EventOnEsc | EventOnButton);
-        if (in.abort) {
-            success = 0;
-            break;
+        if (search_key_changed) {
+            end_query_bar(app, search_bar, 0);
+            result_selected_index = 0;
+            
+            for (int i = result_count - 1; i >= 0; --i) {
+                end_query_bar(app, &result_bars[i], 0);
+            }
+            result_count = 0;
+            
+            int32_t min_score = 0x7FFFFFFF;
+            int32_t min_index = -1;
+            
+            int32_t result_scores[ArrayCount(result_indices)];
+            
+            for (int i = 0; i < list_count; ++i) {
+                String candidate = list[i].value;
+                
+                if (full_rescan || list[i].matched_pattern_prefix_length >= current_min) {
+                    int32_t score = tld_fuzzy_match_ss(search_bar->string, candidate);
+#ifdef TLDUI_TRANSPOSE_PATTERNS
+                    for (int j = 1; j < search_bar->string.size; ++j) {
+                        char temp = search_bar->string.str[j - 1];
+                        search_bar->string.str[j - 1] = search_bar->string.str[j];
+                        search_bar->string.str[j] = temp;
+                        
+                        int32_t score_transpose = tld_fuzzy_match_ss(search_bar->string, candidate) / 4;
+                        
+                        search_bar->string.str[j] = search_bar.str[j - 1];
+                        search_bar->string.str[j - 1] = temp;
+                        
+                        if (score < score_transpose) {
+                            score = score_transpose;
+                        }
+                    }
+#endif
+                    
+                    if (score > 0) {
+                        list[i].matched_pattern_prefix_length = search_bar->string.size;
+                        
+                        if (result_count < ArrayCount(result_indices)) {
+                            result_indices[result_count] = i;
+                            result_scores[result_count] = score;
+                            
+                            if (score > min_score) {
+                                min_score = score;
+                                min_index = result_count;
+                            }
+                            
+                            ++result_count;
+                        } else if (score > result_scores[min_index]) {
+                            result_indices[min_index] = i;
+                            result_scores[min_index] = score;
+                            
+                            min_index = 0;
+                            min_score = result_scores[0];
+                            
+                            for (int j = 1; j <= ArrayCount(result_indices); ++j) {
+                                if (result_scores[j] < min_score) {
+                                    min_score = result_scores[j];
+                                    min_index = j;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            for (int i = 0; i < result_count - 1; ++i) {
+                int max = i;
+                for (int j = i + 1; j < result_count; ++j) {
+                    if (result_scores[j] > result_scores[max]) {
+                        max = j;
+                    }
+                }
+                
+                int32_t s = result_indices[i];
+                result_indices[i] = result_indices[max];
+                result_indices[max] = s;
+                
+                int32_t c = result_scores[i];
+                result_scores[i] = result_scores[max];
+                result_scores[max] = c;
+            }
+            
+            for (int i = result_count - 1; i >= 0; --i) {
+                result_bars[i].string = list[result_indices[i]].value;
+                start_query_bar(app, &result_bars[i], 0);
+            }
+            
+            start_query_bar(app, search_bar, 0);
         }
         
-        good_character = 0;
-        if (key_is_unmodified(&in.key) && in.key.character != 0) {
-            good_character = 1;
+        if (selected_index_changed || search_key_changed) {
+            for (int i = 0; i < result_count; ++i) {
+                if (i == result_selected_index) {
+                    result_bars[i].prompt = list[result_indices[i]].value;
+                    result_bars[i].string = empty;
+                } else {
+                    result_bars[i].prompt = empty;
+                    result_bars[i].string = list[result_indices[i]].value;
+                }
+            }
+        }
+        
+        User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+        selected_index_changed = false;
+        search_key_changed = false;
+        full_rescan = false;
+        
+        if (in.abort) {
+            for (int i = 0; i < ArrayCount(result_indices); ++i) {
+                end_query_bar(app, &result_bars[i], 0);
+            }
+            
+            return -1;
         }
         
         if (in.type == UserInputKey) {
-            if (in.key.keycode == '\n' || in.key.keycode == '\t') {
-                break;
-            } else if (in.key.keycode == key_back) {
-                if (bar->string.size > 0) {
-                    --bar->string.size;
+            if (in.key.keycode == '\n') {
+                if (result_count > 0) {
+                    if (result_selected_index < 0)
+                        result_selected_index = 0;
+                    
+                    for (int i = 0; i < ArrayCount(result_indices); ++i) {
+                        end_query_bar(app, &result_bars[i], 0);
+                    }
+                    
+                    return result_indices[result_selected_index];
                 }
-            } else if (good_character) {
-                append_s_char(&bar->string, in.key.character);
+            } else if (in.key.keycode == key_back) {
+                if (search_bar->string.size > 0) {
+                    backspace_utf8(&search_bar->string);
+                    search_key_changed = true;
+                }
+                current_min = search_bar->string.size;
+            } else if (in.key.keycode == key_del) {
+                search_bar->string.size = 0;
+                result_selected_index = 0;
+                
+                for (int i = result_count - 1; i >= 0; --i) {
+                    end_query_bar(app, &result_bars[i], 0);
+                }
+                
+                full_rescan = true;
+                current_min = 0;
+            } else if (in.key.keycode == key_up) {
+                selected_index_changed = true;
+                
+                --result_selected_index;
+                if (result_selected_index < 0) {
+                    result_selected_index = result_count - 1;
+                }
+            } else if (in.key.keycode == key_down) {
+                selected_index_changed = true;
+                
+                ++result_selected_index;
+                if (result_selected_index >= result_count) {
+                    result_selected_index = 0;
+                }
+            } else if (key_is_unmodified(&in.key) && in.key.character != 0) {
+                uint8_t character[4];
+                uint32_t length = to_writable_character(in, character);
+                if (length != 0 && search_bar->string.memory_size - search_bar->string.size > (int32_t)length) {
+                    append_ss(&search_bar->string, make_string((char *) &character, length));
+                    search_key_changed = true;
+                    current_min = search_bar->string.size - 1;
+                }
             }
         }
     }
-    
-    terminate_with_null(&bar->string);
-    return success;
 }
-
-// Displays the specified message in a Query_Bar and waits for user input,
-// so as to make sure that the user acknowledged the message at least.
-static void
-tld_show_acknowledged_message(Application_Links *app, String title, String message) {
-    Query_Bar message_bar = {0};
-    message_bar.prompt = title;
-    message_bar.string = message;
-    start_query_bar(app, &message_bar, 0);
-    
-    User_Input in = get_user_input(app, EventOnAnyKey, EventOnButton);
-    end_query_bar(app, &message_bar, 0);
-}
-
-#define tld_show_error(message) tld_show_acknowledged_message(app, make_lit_string("ERROR: "), make_lit_string(message));
-
-#define tld_show_warning(message) tld_show_acknowledged_message(app, make_lit_string("WARNING: "), make_lit_string(message));
 
 #endif

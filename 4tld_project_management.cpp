@@ -1,5 +1,4 @@
 /******************************************************************************
-File: 4tld_project_management.cpp
 Author: Tristan Dannenberg
 Notice: No warranty is offered or implied; use this code at your own risk.
 *******************************************************************************
@@ -9,456 +8,394 @@ This software is dual-licensed to the public domain and under the following
 license: you are granted a perpetual, irrevocable license to copy, modify,
 publish, and distribute this file as you see fit.
 *******************************************************************************
-This file hosts a replacement for the default project management code. I
-decided to make this because the existing one gives the per-project
-configuration too much power, and I would rather have more consistent
-behaviour enforced.
-
-This parses project data from a buffer, rather than a file, so I suggest
-calling tld_project_load_from_buffer from the open file hook when you detect a
-project file.
-
-A project specification consists of blank lines, comment lines, and key/value
-pairs on a single line. Comment lines are designated with a '#' character,
-after any optional leading whitespace.
-
-Key/Value pairs are separated by any amount of whitespace. The keys this code
-understands are as follows:
-* source.file  - The relative path to a source file. You may use a single '*'
-  character as a wildcard, e.g. `source.file src/*.cpp` to open multiple files
-  at once. Note that source files are opened in a separate call to
-  tld_project_open_source_files.
-* build.config - A system command line for use by the
-  tld_project_build_current_config function.
-* debug.config - A system command line for use by the
-  tld_project_debug_current_config function. Note that this is sort of stub
-  function, meant for later extension, if 4coder ever gets integrated
-  debugging features.
-  
-Preprocessor Variables:
-* TLDPM_SOURCE_FILES_CAPACITY - The maximum number of source.file values that
-  will actually be stored on a project.
-* TLDPM_CONFIGURATIONS_CAPACITY - The maximum number of both build.config and
-  source.config values that will be stored on a project. Note that, if you
-  are using the default commands, this should not be set to anything higher
-  than 7, as 4coder can only display 8 query bars, and one is already used
-  for the hints.
-* TLDPM_IMPLEMENT_COMMANDS - If this is defined, the custom commands listed
-  below are implemented. This is set up this way, so that you can define your
-  own variations without compiling commands you won't use, and other command
-  packs can utilize these commands if you _are_ using them.
-  
-Provided Commands:
-* tld_current_project_build
-* tld_current_project_save_and_build
-* tld_current_project_change_build_config
-* tld_current_project_save_and_change_build_config
-* tld_current_project_debug
-* tld_current_project_build_and_debug
-* tld_current_project_save_build_and_debug
-* tld_current_project_change_debug_config
-* tld_current_project_build_and_change_debug_config
-* tld_current_project_save_build_and_change_debug_config
-
-Note that, to use these commands, the global project has to be initialized. To
-do so, call tld_project_memory_init() before opening the project. I do this in
-start hook, but you could do this at pretty much any time.
+NOTE that currently, build configurations and test configurations function
+practically identically. This will change as Lysa or other debugger frontends
+for 4coder become available and are integrated into 4tld.
 ******************************************************************************/
-#include "4tld_user_interface.h"
 
-#ifndef TLDPM_SOURCE_FILES_CAPACITY
-#define TLDPM_SOURCE_FILES_CAPACITY 16
-#endif
-
-#ifndef TLDPM_CONFIGURATIONS_CAPACITY
-#define TLDPM_CONFIGURATIONS_CAPACITY 7
-#endif
-
-struct tld_Project {
-    String working_directory;
+struct tld_project {
+    String project_file;
     
-    String   source_files[TLDPM_SOURCE_FILES_CAPACITY];
-    uint32_t source_files_count;
+    String source_dir;
+    char ** source_extensions;
+    int32_t source_extension_count;
     
-    String   build_configurations[TLDPM_CONFIGURATIONS_CAPACITY];
-    uint32_t build_configurations_count;
-    uint32_t build_configurations_current;
+    String build_dir;
+    char ** build_configs;
+    int32_t build_config_count;
+    int32_t build_config_current_index;
     
-    String   debug_configurations[TLDPM_CONFIGURATIONS_CAPACITY];
-    uint32_t debug_configurations_count;
-    uint32_t debug_configurations_current;
+    String test_dir;
+    char ** test_configs;
+    int32_t test_config_count;
+    int32_t test_config_current_index;
 };
 
-// Parse a single line from a project file
-inline bool32
-tld_project_parse_line(tld_Project *project, char *line, int line_length, Partition *memory) {
-    if (line_length <= 0) return true;
-    
-    char *line_end = line + line_length;
-    while (line < line_end && (*line == ' ' || *line == '\t')) {
-        ++line;
-    }
-    
-    if (line < line_end && *line == '#') return true;
-    
-    char *ident = line;
-    while (line < line_end && (*line != ' ' && *line != '\t')) {
-        ++line;
-    }
-    int ident_length = (int)(line - ident);
-    
-    while (line < line_end && (*line == ' ' || *line == '\t')) {
-        ++line;
-    }
-    
-    int content_length = (int)(line_end - line);
-    
-    if (match_sc(make_string(ident, ident_length), "source.file") &&
-        project->source_files_count < TLDPM_SOURCE_FILES_CAPACITY) {
-        String new_source_file;
-        new_source_file.str = (char *)partition_allocate(memory, content_length);
-        new_source_file.memory_size = content_length;
-        
-        if (new_source_file.str) {
-            copy_partial_ss(&new_source_file, make_string(line, content_length));
+#ifndef TLDPM_SRC_EXTENSION_CAPACITY
+#define TLDPM_SRC_EXTENSION_CAPACITY 8
+#endif
+
+#ifndef TLDPM_BUILD_CONFIG_CAPACITY
+#define TLDPM_BUILD_CONFIG_CAPACITY 16
+#endif
+
+#ifndef TLDPM_TEST_CONFIG_CAPACITY
+#define TLDPM_TEST_CONFIG_CAPACITY 16
+#endif
+
+static inline void
+tld_project_read_string_array(Config_Item item,
+                              char * array_identifier,
+                              Config_Array_Reader * array_reader,
+                              char ** dest_array,
+                              int32_t * dest_count,
+                              int32_t dest_capacity)
+{
+    if (config_array_var(item, array_identifier, 0, array_reader)) {
+        Config_Item array_element;
+        while (config_array_next_item(array_reader,
+                                      &array_element))
+        {
+            String value;
+            value.str = (char *) malloc(1024);
+            value.size = 0;
+            value.memory_size = 1024;
             
-            project->source_files[project->source_files_count] = new_source_file;
-            project->source_files_count += 1;
-        } else {
-            return false;
+            if ((*dest_count < dest_capacity) &&
+                config_string_var(array_element, 0, 0, &value))
+            {
+                terminate_with_null(&value);
+                dest_array[*dest_count] = value.str;
+                *dest_count += 1;
+            }
         }
-    } else if (match_sc(make_string(ident, ident_length), "build.config") &&
-               project->build_configurations_count < TLDPM_CONFIGURATIONS_CAPACITY) {
-        String new_build_config;
-        new_build_config.str = (char *)partition_allocate(memory, content_length);
-        new_build_config.memory_size = content_length;
-        
-        if (new_build_config.str) {
-            copy_partial_ss(&new_build_config, make_string(line, content_length));
-            
-            project->build_configurations[project->build_configurations_count] = new_build_config;
-            project->build_configurations_count += 1;
-        } else {
-            return false;
-        }
-        
-    } else if (match_sc(make_string(ident, ident_length), "debug.config") &&
-               project->debug_configurations_count < TLDPM_CONFIGURATIONS_CAPACITY) {
-        String new_debug_config;
-        new_debug_config.str = (char *)partition_allocate(memory, content_length);
-        new_debug_config.memory_size = content_length;
-        
-        if (new_debug_config.str) {
-            copy_partial_ss(&new_debug_config, make_string(line, content_length));
-            
-            project->debug_configurations[project->debug_configurations_count] = new_debug_config;
-            project->debug_configurations_count += 1;
-        } else {
-            return false;
-        }
-        
     }
-    
-    return true;
 }
 
-// Parse a full project file from a buffer
-tld_Project
-tld_project_load_from_buffer(Application_Links *app, int32_t buffer_id, Partition *memory) {
-    tld_Project result = {0};
-    int pos = 0, beginning_of_line = 0;
-    
-    Buffer_Summary buffer = get_buffer(app, buffer_id, AccessAll);
-    result.working_directory = path_of_directory(make_string(buffer.file_name, buffer.file_name_len));
-    
-    String working_directory_copy;
-    working_directory_copy.str = (char *)partition_allocate(memory, result.working_directory.size);
-    working_directory_copy.memory_size = result.working_directory.size;
-    if (!working_directory_copy.str) {
-        tld_show_error("Out of project memory -- failed to load project!");
-        return {0};
+static inline void
+tld_project_read_relative_path(String *dest, String base_path, String rel_path) {
+    if (rel_path.size) {
+        // TODO: Use directory_cd once that is fixed
+        
+        dest->size = 0;
+        dest->memory_size = base_path.size + rel_path.size;
+        dest->str = (char *) malloc(dest->memory_size);
+        
+        append_ss(dest, base_path);
+        append_ss(dest, rel_path);
+    } else {
+        *dest = base_path;
     }
-    copy_partial_ss(&working_directory_copy, result.working_directory);
-    result.working_directory = working_directory_copy;
+}
+
+static void
+tld_project_read_from_file(Application_Links *app,
+                           tld_project *dest,
+                           char *file_name,
+                           int32_t file_name_len)
+{
+    Partition *part = &global_part;
+    FILE *file = fopen(file_name, "rb");
     
-    char current_line[2048];
+    String base_path = path_of_directory(make_string(file_name, file_name_len));
     
-    char chunk[1024];
-    int chunk_size = sizeof(chunk);
-    Stream_Chunk stream = {0};
-    
-    bool32 success = true;
-    
-    if (init_stream_chunk(&stream, app, &buffer, pos, chunk, chunk_size)) {
-        do {
-            for (; pos < stream.end; ++pos) {
-                if (stream.data[pos] == '\n') {
-                    buffer_read_range(app, &buffer, beginning_of_line, pos, current_line);
-                    int current_line_length = pos - beginning_of_line;
-                    
-                    success &= tld_project_parse_line(&result, current_line,
-                                                      current_line_length, memory);
-                    
-                    beginning_of_line = pos + 1;
+    if (file) {
+        Temp_Memory temp = begin_temp_memory(part);
+        
+        char *mem = 0;
+        int32_t size = 0;
+        bool32 file_read_success = file_handle_dump(part, file, &mem, &size);
+        fclose(file);
+        
+        if (file_read_success) {
+            *dest = {0};
+            
+            dest->project_file = make_string(file_name, file_name_len);
+            
+            dest->source_extensions = (char **) malloc(
+                sizeof(char *) * TLDPM_SRC_EXTENSION_CAPACITY);
+            dest->build_configs = (char **) malloc(
+                sizeof(char *) * TLDPM_BUILD_CONFIG_CAPACITY);
+            dest->test_configs = (char **) malloc(
+                sizeof(char *) * TLDPM_TEST_CONFIG_CAPACITY);
+            
+            Cpp_Token_Array array;
+            array.count = 0;
+            array.max_count = (1 << 20)/sizeof(Cpp_Token);
+            array.tokens = push_array(&global_part, Cpp_Token, array.max_count);
+            
+            Cpp_Keyword_Table kw_table = {0};
+            Cpp_Keyword_Table pp_table = {0};
+            lexer_keywords_default_init(part, &kw_table, &pp_table);
+            
+            Cpp_Lex_Data S = cpp_lex_data_init(false, kw_table, pp_table);
+            Cpp_Lex_Result result = cpp_lex_step(&S, mem, size + 1,
+                                                 HAS_NULL_TERM, &array,
+                                                 NO_OUT_LIMIT);
+            
+            char source_dir_space[256];
+            String source_dir = make_fixed_width_string(source_dir_space);
+            
+            char build_dir_space[256];
+            String build_dir = make_fixed_width_string(build_dir_space);
+            
+            char build_err_format_space[16];
+            String build_error_format = make_fixed_width_string(build_err_format_space);
+            
+            char test_dir_space[256];
+            String test_dir = make_fixed_width_string(test_dir_space);
+            
+            char version_control_system_space[16];
+            String vcs = make_fixed_width_string(version_control_system_space);
+            
+            Config_Array_Reader array_reader;
+            
+            if (result == LexResult_Finished) {
+                for (int32_t i = 0; i < array.count; ++i) {
+                    Config_Line config_line = read_config_line(array, &i);
+                    if (config_line.read_success) {
+                        Config_Item item = get_config_item(
+                            config_line, mem, array);
+                        
+                        config_string_var(item, "source_dir", 0, &source_dir);
+                        config_string_var(item, "build_dir", 0, &build_dir);
+                        config_string_var(item, "test_dir", 0, &test_dir);
+                        
+                        config_identifier_var(
+                            item, "build_error_format", 0, &build_error_format);
+                        config_identifier_var(
+                            item, "version_control_system", 0, &vcs);
+                        
+                        tld_project_read_string_array(item, "source_extensions", &array_reader,
+                                                      dest->source_extensions,
+                                                      &dest->source_extension_count,
+                                                      TLDPM_SRC_EXTENSION_CAPACITY);
+                        tld_project_read_string_array(item, "build_configs", &array_reader,
+                                                      dest->build_configs,
+                                                      &dest->build_config_count,
+                                                      TLDPM_BUILD_CONFIG_CAPACITY);
+                        tld_project_read_string_array(item, "test_configs", &array_reader,
+                                                      dest->test_configs,
+                                                      &dest->test_config_count,
+                                                      TLDPM_TEST_CONFIG_CAPACITY);
+                    }
+                }
+                
+                tld_project_read_relative_path(&dest->source_dir, base_path, source_dir);
+                tld_project_read_relative_path(&dest->build_dir,  base_path, build_dir);
+                tld_project_read_relative_path(&dest->test_dir,   base_path, test_dir);
+                
+                if (build_error_format.size) {
+                    // TODO: Implement error parsers and set them here
+                    // (which ones are compatible, or even interchangeable?)
+                    if (match(build_error_format, "ERR_STYLE_GCC")) {
+                    } else if (match(build_error_format, "ERR_STYLE_MSVC")) {
+                    } else if (match(build_error_format, "ERR_STYLE_CLANG")) {
+                    } else if (match(build_error_format, "ERR_STYLE_RUSTC")) {
+                    } else {
+                        Assert(false); // TODO: Report unsupported error format
+                    }
+                }
+                
+                if (vcs.size) {
+                    if (match(vcs, "VCS_GIT")) {
+                        // TODO: Version Control Interface
+                    } else {
+                        Assert(false); // TODO: Report unsupported VCS error
+                    }
                 }
             }
-        } while (forward_stream_chunk(&stream));
+        }
         
-        buffer_read_range(app, &buffer, beginning_of_line, pos, current_line);
-        int current_line_length = pos - beginning_of_line;
-        tld_project_parse_line(&result, current_line, current_line_length, memory);
+        end_temp_memory(temp);
+    }
+}
+
+static void
+tld_project_free(tld_project * proj) {
+    for (int i = 0; i < proj->source_extension_count; ++i) {
+        free(proj->source_extensions[i]);
+    }
+    free(proj->source_extensions);
+    
+    for (int i = 0; i < proj->build_config_count; ++i) {
+        free(proj->build_configs[i]);
+    }
+    free(proj->build_configs);
+    
+    for (int i = 0; i < proj->test_config_count; ++i) {
+        free(proj->test_configs[i]);
+    }
+    free(proj->test_configs);
+    
+    *proj = {0};
+}
+
+static tld_project tld_current_project = {0};
+
+CUSTOM_COMMAND_SIG(tld_project_open_all_code) {
+    tld_project * proj = &tld_current_project;
+    
+    if (proj->source_dir.str && proj->source_extension_count) {
+        // open_all_files_with_extension_internal uses the tail memory in the
+        // directory string -- however, this may be part of proj->project_file,
+        // which must not be overwritten, so we copy source_dir before starting
+        
+        char src_dir_space[4096];
+        String src_dir = make_fixed_width_string(src_dir_space);
+        append_ss(&src_dir, proj->source_dir);
+        
+        if (src_dir.str[src_dir.size - 1] != '/' &&
+            src_dir.str[src_dir.size - 1] != '\\')
+        {
+            append_s_char(&src_dir, '/');
+        }
+        
+        open_all_files_with_extension_internal(app, src_dir, proj->source_extensions,
+                                               proj->source_extension_count, false);
+    }
+}
+
+CUSTOM_COMMAND_SIG(tld_reload_project) {
+    String project_path = tld_current_project.project_file;
+    if (project_path.str) {
+        tld_project_free(&tld_current_project);
+        tld_project_read_from_file(app, &tld_current_project,
+                                   expand_str(project_path));
+    }
+}
+
+CUSTOM_COMMAND_SIG(tld_build_project) {
+    tld_project * proj = &tld_current_project;
+    
+    if (proj->build_config_count) {
+        if (proj->build_config_current_index >= proj->build_config_count) {
+            proj->build_config_current_index = 0;
+        }
+        
+        char * build_config_raw = proj->build_configs[proj->build_config_current_index];
+        String build_config = make_string_slowly(build_config_raw);
+        
+        Buffer_Summary buffer;
+        View_Summary view;
+        
+        tld_display_buffer_by_name(app, make_lit_string("*build*"),
+                                   &buffer, &view, true, AccessAll);
+        exec_system_command(app, &view, buffer_identifier(buffer.buffer_id),
+                            expand_str(proj->build_dir), expand_str(build_config),
+                            CLI_OverlapWithConflict | CLI_CursorAtEnd);
+        
+        // TODO: Parse error locations according to the configured error parser
+        // and construct a jump buffer, potentially with a prettier error list
+    }
+}
+
+CUSTOM_COMMAND_SIG(tld_test_project) {
+    tld_project * proj = &tld_current_project;
+    
+    if (proj->test_config_count) {
+        if (proj->test_config_current_index >= proj->test_config_count) {
+            proj->test_config_current_index = 0;
+        }
+        
+        char * test_config_raw = proj->test_configs[proj->test_config_current_index];
+        String test_config = make_string_slowly(test_config_raw);
+        
+        Buffer_Summary buffer;
+        View_Summary view;
+        
+        tld_display_buffer_by_name(app, make_lit_string("*test*"),
+                                   &buffer, &view, true, AccessAll);
+        exec_system_command(app, &view, buffer_identifier(buffer.buffer_id),
+                            expand_str(proj->test_dir), expand_str(test_config),
+                            CLI_OverlapWithConflict | CLI_CursorAtEnd);
+    }
+}
+
+// TODO: Parts of this function should definitely be extracted into 4tld_user_interface.h
+static inline bool32
+tld_change_config_impl(Application_Links *app,
+                       char * buffer_name, int32_t buffer_name_len,
+                       char ** list, int32_t list_len,
+                       int32_t * list_selected_index)
+{
+    bool32 result = false;
+    
+    View_Summary active_view = get_active_view(app, AccessAll);
+    
+    View_Summary config_view = open_view(app, &active_view, ViewSplit_Top);
+    view_set_split_proportion(app, &config_view, 0.25f);
+    view_set_setting(app, &config_view, ViewSetting_ShowScrollbar, false);
+    
+    Buffer_Summary config_buffer = get_buffer_by_name(app, buffer_name, buffer_name_len, AccessAll);
+    if (!config_buffer.exists) {
+        config_buffer = create_buffer(app, buffer_name, buffer_name_len, BufferCreate_AlwaysNew);
+        buffer_set_setting(app, &config_buffer, BufferSetting_Unimportant, true);
+        buffer_set_setting(app, &config_buffer, BufferSetting_ReadOnly, true);
+    }
+    view_set_buffer(app, &config_view, config_buffer.buffer_id, 0);
+    
+    buffer_replace_range(app, &config_buffer, 0, config_buffer.size, 0, 0);
+    Range * ranges = (Range *) malloc(sizeof(Range) * list_len);
+    Range * next_cell = ranges;
+    
+    for (int i = 0; i < list_len; ++i) {
+        String config = make_string_slowly(list[i]);
+        
+        *next_cell++ = make_range(config_buffer.size, config_buffer.size + config.size);
+        
+        buffer_replace_range(
+            app, &config_buffer, config_buffer.size, config_buffer.size, expand_str(config));
+        buffer_replace_range(
+            app, &config_buffer, config_buffer.size, config_buffer.size, literal("\n"));
     }
     
-    if (!success) {
-        tld_show_warning("Out of project memory -- some features may not work as configured.");
-    }
+    int32_t selected_index = *list_selected_index;
+    User_Input in;
+    do {
+        Range r = ranges[selected_index];
+        view_set_highlight(app, &config_view, r.min, r.max, 1);
+        
+        in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+        
+        if (in.key.keycode == key_up || in.key.keycode == 'i') {
+            if (selected_index > 0)
+                selected_index -= 1;
+        } else if (in.key.keycode == key_down || in.key.keycode == 'k') {
+            if (selected_index < list_len - 1)
+                selected_index += 1;
+        } else if (in.key.keycode == '\n') {
+            *list_selected_index = selected_index;
+            
+            result = true;
+            break;
+        }
+    } while (!in.abort);
+    
+    free(ranges);
+    kill_buffer(app, buffer_identifier(config_buffer.buffer_id),
+                config_view.view_id, BufferKill_AlwaysKill);
+    close_view(app, &config_view);
     
     return result;
 }
 
-// Reset the memory partition, and reuse it in parsing a new project
-tld_Project
-tld_project_reload_from_buffer(Application_Links *app, int32_t buffer_id, Partition *memory) {
-    memory->pos = 0;
-    return tld_project_load_from_buffer(app, buffer_id, memory);
-}
-
-// Open all source files as specified by the project file
-void tld_project_open_source_files(Application_Links *app, tld_Project *project, Partition *memory) {
-    int32_t max_size = partition_remaining(memory);
-    Temp_Memory temp = begin_temp_memory(memory);
-    char *scratch_space = push_array(memory, char, max_size);
-    
-    String dir = make_string_cap(scratch_space, 0, max_size);
-    append_ss(&dir, project->working_directory);
-    
-    for (unsigned int i = 0; i < project->source_files_count; ++i) {
-        String specified_file = project->source_files[i];
-        String file_name = front_of_directory(specified_file);
-        int32_t prefix_len = find_s_char(file_name, 0, '*');
-        
-        if (prefix_len < specified_file.size) {
-            // NOTE: Wildcarded string
-            tld_change_directory(&dir, path_of_directory(specified_file));
-            
-            String prefix = make_string(file_name.str, prefix_len);
-            String suffix = make_string(file_name.str  + prefix_len + 1,
-                                        file_name.size - prefix_len - 1);
-            
-            File_List all_files = get_file_list(app, expand_str(dir));
-            for (int j = 0; j < all_files.count; ++j) {
-                File_Info next_file = all_files.infos[j];
-                if (next_file.folder) continue;
-                
-                String next_file_name = make_string(next_file.filename, next_file.filename_len);
-                String next_file_name_end = make_string(next_file_name.str + next_file_name.size - suffix.size, suffix.size);
-                
-                if (match_part_insensitive_ss(next_file_name, prefix) &&
-                    match_insensitive_ss(next_file_name_end, suffix))
-                {
-                    int32_t dir_old_size = dir.size;
-                    append_ss(&dir, next_file_name);
-                    open_file(app, 0, expand_str(dir), true, false);
-                    dir.size = dir_old_size;
-                }
-            }
-            free_file_list(app, all_files);
-        } else {
-            // NOTE: Normal file name
-            append_ss(&dir, specified_file);
-            open_file(app, 0, expand_str(dir), true, false);
-        }
-        
-        dir.size = project->working_directory.size;
+CUSTOM_COMMAND_SIG(tld_change_build_config) {
+    bool32 success = tld_change_config_impl(app, literal("*build-config*"),
+                                            tld_current_project.build_configs,
+                                            tld_current_project.build_config_count,
+                                            &tld_current_project.build_config_current_index);
+    if (success) {
+        exec_command(app, tld_build_project);
     }
 }
 
-// Build the project using the currently selected build configuration
-static bool32
-tld_project_build_current_config(Application_Links *app, tld_Project *project,
-                                 Buffer_Identifier buffer, View_Summary *view)
-{
-    uint32_t config_index = project->build_configurations_current;
-    return exec_system_command(app, view, buffer, expand_str(project->working_directory),
-                               expand_str(project->build_configurations[config_index]),
-                               CLI_OverlapWithConflict | CLI_CursorAtEnd);
-}
-
-// Run the currently selected debug configuration
-static bool32
-tld_project_debug_current_config(Application_Links *app, tld_Project *project,
-                                 Buffer_Identifier buffer, View_Summary *view)
-{
-    uint32_t config_index = project->debug_configurations_current;
-    return exec_system_command(app, view, buffer, expand_str(project->working_directory),
-                               expand_str(project->debug_configurations[config_index]),
-                               CLI_OverlapWithConflict | CLI_CursorAtEnd);
-}
-
-#ifdef TLDPM_IMPLEMENT_COMMANDS
-
-// The global project object and associated memory
-static tld_Project tld_current_project = {0};
-static void *__tld_current_project_memory_internal = {0};
-static Partition tld_current_project_memory = {0};
-
-#ifndef TLD_HOME_DIRECTORY
-#define TLD_HOME_DIRECTORY
-static void
-tld_get_home_directory(Application_Links *app, String *dest) {
-    if (tld_current_project.working_directory.str) {
-        copy_ss(dest, tld_current_project.working_directory);
-    } else {
-        dest->size = directory_get_hot(app, dest->str, dest->memory_size);
+CUSTOM_COMMAND_SIG(tld_change_test_config) {
+    bool32 success = tld_change_config_impl(app, literal("*test-config*"),
+                                            tld_current_project.test_configs,
+                                            tld_current_project.test_config_count,
+                                            &tld_current_project.build_config_current_index);
+    if (success) {
+        exec_command(app, tld_test_project);
     }
 }
-#endif
-
-// Allocate the global project memory
-void tld_project_memory_init() {
-    int32_t size = 8 * 1024;
-    __tld_current_project_memory_internal = malloc(size);
-    tld_current_project_memory = make_part(__tld_current_project_memory_internal, size);
-}
-
-// Free the global project memory
-void tld_project_memory_free() {
-    free(__tld_current_project_memory_internal);
-    tld_current_project_memory = {0};
-}
-
-// Build the project using the currently selected configuration,
-// with the output in the *build* buffer
-CUSTOM_COMMAND_SIG(tld_current_project_build) {
-    if (!tld_current_project.working_directory.str) return;
-    
-    Buffer_Summary buffer;
-    View_Summary view;
-    tld_display_buffer_by_name(app, make_lit_string("*build*"), &buffer, &view, true, AccessAll);
-    
-    Buffer_Identifier buffer_id = {0};
-    buffer_id.id = buffer.buffer_id;
-    
-    tld_project_build_current_config(app, &tld_current_project, buffer_id, &view);
-}
-
-// Save all dirty buffers, then build the project using the currently selected configuration,
-// with the output in the *build* buffer.
-CUSTOM_COMMAND_SIG(tld_current_project_save_and_build) {
-    save_all_dirty_buffers(app);
-    exec_command(app, tld_current_project_build);
-}
-
-// Select another build configuration to be used in future builds, then build the project
-CUSTOM_COMMAND_SIG(tld_current_project_change_build_config) {
-    if (!tld_current_project.build_configurations_count) return;
-    
-    bool32 changed = tld_query_persistent_option(app, make_lit_string("Build Configuration:"),
-                                                 tld_current_project.build_configurations, 
-                                                 tld_current_project.build_configurations_count,
-                                                 &tld_current_project.build_configurations_current);
-    
-    if (changed) {
-        Buffer_Summary buffer;
-        View_Summary view;
-        tld_display_buffer_by_name(app, make_lit_string("*build*"),
-                                   &buffer, &view, true, AccessAll);
-        
-        Buffer_Identifier buffer_id = {0};
-        buffer_id.id = buffer.buffer_id;
-        
-        tld_project_build_current_config(app, &tld_current_project, buffer_id, &view);
-    }
-}
-
-// Save all dirty buffers, then select another build configuration
-// to be used in future builds, then build the project
-CUSTOM_COMMAND_SIG(tld_current_project_save_and_change_build_config) {
-    save_all_dirty_buffers(app);
-    exec_command(app, tld_current_project_change_build_config);
-}
-
-// Run the currently selected debug configuration, with the output in the *debug* buffer
-CUSTOM_COMMAND_SIG(tld_current_project_debug) {
-    if (!tld_current_project.working_directory.str) return;
-    
-    Buffer_Summary buffer;
-    View_Summary view;
-    tld_display_buffer_by_name(app, make_lit_string("*debug*"), &buffer, &view, true, AccessAll);
-    
-    Buffer_Identifier buffer_id = {0};
-    buffer_id.id = buffer.buffer_id;
-    
-    tld_project_debug_current_config(app, &tld_current_project, buffer_id, &view);
-}
-
-// Build the project using the current configuration,
-// then run the currently selected debug configuration
-CUSTOM_COMMAND_SIG(tld_current_project_build_and_debug) {
-    if (!tld_current_project.working_directory.str) return;
-    
-    Buffer_Summary buffer;
-    View_Summary view;
-    tld_display_buffer_by_name(app, make_lit_string("*debug*"), &buffer, &view, true, AccessAll);
-    
-    Buffer_Identifier buffer_id = {0};
-    buffer_id.id = buffer.buffer_id;
-    
-    if (tld_project_build_current_config(app, &tld_current_project, buffer_id, &view)) {
-        tld_project_debug_current_config(app, &tld_current_project, buffer_id, &view);
-    }
-}
-
-// Save all dirty buffers, then build the project using the current configuration,
-// then run the currently selected debug configuration
-CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_debug) {
-    save_all_dirty_buffers(app);
-    exec_command(app, tld_current_project_build_and_debug);
-}
-
-// Select another debug configuration to be used in future runs, then run
-CUSTOM_COMMAND_SIG(tld_current_project_change_debug_config) {
-    if (!tld_current_project.debug_configurations_count) return;
-    bool32 changed = tld_query_persistent_option(app, make_lit_string("Debug Configuration:"),
-                                                 tld_current_project.debug_configurations,
-                                                 tld_current_project.debug_configurations_count,
-                                                 &tld_current_project.debug_configurations_current);
-    
-    if (changed) {
-        Buffer_Summary buffer;
-        View_Summary view;
-        tld_display_buffer_by_name(app, make_lit_string("*debug*"),
-                                   &buffer, &view, true, AccessAll);
-        
-        Buffer_Identifier buffer_id = {0};
-        buffer_id.id = buffer.buffer_id;
-        
-        tld_project_debug_current_config(app, &tld_current_project, buffer_id, &view);
-    }
-}
-
-// Build the project using the current configuration,
-// then select another debug configuration to be used in future runs, then run
-CUSTOM_COMMAND_SIG(tld_current_project_build_and_change_debug_config) {
-    if (!tld_current_project.working_directory.str) return;
-    
-    Buffer_Summary buffer;
-    View_Summary view;
-    tld_display_buffer_by_name(app, make_lit_string("*debug*"), &buffer, &view, true, AccessAll);
-    
-    Buffer_Identifier buffer_id = {0};
-    buffer_id.id = buffer.buffer_id;
-    
-    if (tld_project_build_current_config(app, &tld_current_project, buffer_id, &view)) {
-        exec_command(app, tld_current_project_change_debug_config);
-    }
-}
-
-// Save all dirty buffers, then build the project using the current configuration,
-// then select another debug configuration to be used in future runs, then run
-CUSTOM_COMMAND_SIG(tld_current_project_save_build_and_change_debug_config) {
-    save_all_dirty_buffers(app);
-    exec_command(app, tld_current_project_build_and_change_debug_config);
-}
-
-#endif
