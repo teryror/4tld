@@ -11,56 +11,6 @@ publish, and distribute this file as you see fit.
 
 #include "4tld_user_interface.h"
 
-// TODO: The printer and cursor movement can probably be made reusable. Put it into the UI header once it makes its comeback
-
-struct tld_Printer {
-    Buffer_Summary * target;
-    int32_t column_width;
-    int32_t current_column;
-    int32_t column_count;
-};
-
-static tld_Printer
-tld_make_printer(Buffer_Summary * target_buffer, uint32_t column_width, int32_t column_count) {
-    tld_Printer printer;
-    
-    printer.target = target_buffer;
-    printer.column_width = column_width;
-    printer.column_count = column_count;
-    printer.current_column = 0;
-    
-    return printer;
-}
-
-static Range
-tld_print(Application_Links *app, tld_Printer *printer, String text) {
-    Assert(printer->column_width <= 40);
-    const char spaces[41] = "                                        ";
-    
-    int32_t max_width = printer->column_count * printer->column_width;
-    int32_t projected_width = printer->current_column * printer->column_width + text.size;
-    
-    if (printer->current_column > 0 && projected_width > max_width) {
-        buffer_replace_range(app, printer->target, printer->target->size,
-                             printer->target->size, literal("\n"));
-        printer->current_column = 0;
-    }
-    
-    Range result;
-    result.min = printer->target->size;
-    result.max = result.min + text.size;
-    
-    buffer_replace_range(app, printer->target, printer->target->size,
-                         printer->target->size, expand_str(text));
-    buffer_replace_range(app, printer->target, printer->target->size,
-                         printer->target->size, (char *) &spaces,
-                         printer->column_width - (text.size % printer->column_width));
-    
-    printer->current_column += 1 + text.size / printer->column_width;
-    
-    return result;
-}
-
 // TODO: Store the hot_directory with the state, so that we don't glitch when the hot directory is changed underneath us
 
 struct tld_file_manager_state {
@@ -84,7 +34,7 @@ tld_print_directory(Application_Links *app,
     
     buffer_replace_range(app, buffer, 0, buffer->size, expand_str(dir));
     buffer_replace_range(app, buffer, buffer->size, buffer->size, literal(tld_files_dir_header));
-    tld_Printer printer = tld_make_printer(buffer, 30, 3);
+    tldui_table_printer printer = tldui_make_table(buffer, 30, 3);
     
     File_List contents = get_file_list(app, expand_str(dir));
     new_state.entry_count = contents.count;
@@ -101,7 +51,7 @@ tld_print_directory(Application_Links *app,
             }
             
             new_state.directory_count += 1;
-            *next_cell++ = tld_print(app, &printer, file_name);
+            *next_cell++ = tldui_print_table_cell(app, &printer, file_name);
         }
     }
     
@@ -115,7 +65,7 @@ tld_print_directory(Application_Links *app,
                 new_state.selected_index = (int32_t)(next_cell - new_state.cells);
             }
             
-            *next_cell++ = tld_print(app, &printer, file_name);
+            *next_cell++ = tldui_print_table_cell(app, &printer, file_name);
         }
     }
     

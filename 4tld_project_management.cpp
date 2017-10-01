@@ -13,6 +13,17 @@ practically identically. This will change as Lysa or other debugger frontends
 for 4coder become available and are integrated into 4tld.
 ******************************************************************************/
 
+struct tld_project;
+
+typedef void (*tld_vcs_print_status)(Application_Links *, String, View_Summary *, Buffer_Summary *);
+typedef void (*tld_vcs_print_log)(Application_Links *, String, View_Summary *, Buffer_Summary *);
+
+struct tld_version_control_system {
+    char * identifier;
+    tld_vcs_print_status print_status;
+    tld_vcs_print_log print_log;
+};
+
 struct tld_project {
     String project_file;
     
@@ -29,6 +40,9 @@ struct tld_project {
     char ** test_configs;
     int32_t test_config_count;
     int32_t test_config_current_index;
+    
+    tld_version_control_system * vcs;
+    String version_control_dir;
 };
 
 #ifndef TLDPM_SRC_EXTENSION_CAPACITY
@@ -42,6 +56,21 @@ struct tld_project {
 #ifndef TLDPM_TEST_CONFIG_CAPACITY
 #define TLDPM_TEST_CONFIG_CAPACITY 16
 #endif
+
+#ifndef TLDPM_VCS_CAPACITY
+#define TLDPM_VCS_CAPACITY 8
+#endif
+
+static tld_version_control_system * tld_project_version_control_systems[TLDPM_VCS_CAPACITY];
+static int tld_project_version_control_system_count = 0;
+
+static inline bool32
+tld_project_register_version_control_system(tld_version_control_system * vcs) {
+    if (tld_project_version_control_system_count >= TLDPM_VCS_CAPACITY) return false;
+    
+    tld_project_version_control_systems[tld_project_version_control_system_count++] = vcs;
+    return true;
+}
 
 static inline void
 tld_project_read_string_array(Config_Item item,
@@ -198,9 +227,14 @@ tld_project_read_from_file(Application_Links *app,
                 }
                 
                 if (vcs.size) {
-                    if (match(vcs, "VCS_GIT")) {
-                        // TODO: Version Control Interface
-                    } else {
+                    for (int i = 0; i < tld_project_version_control_system_count; ++i) {
+                        if (match(vcs, tld_project_version_control_systems[i]->identifier)) {
+                            dest->vcs = tld_project_version_control_systems[i];
+                            break;
+                        }
+                    }
+                    
+                    if (dest->vcs == 0) {
                         Assert(false); // TODO: Report unsupported VCS error
                     }
                 }
@@ -262,6 +296,19 @@ CUSTOM_COMMAND_SIG(tld_reload_project) {
         tld_project_free(&tld_current_project);
         tld_project_read_from_file(app, &tld_current_project,
                                    expand_str(project_path));
+    }
+}
+
+CUSTOM_COMMAND_SIG(tld_project_show_vcs_status) {
+    tld_project * proj = &tld_current_project;
+    
+    if (proj->vcs) {
+        Buffer_Summary buffer;
+        View_Summary view;
+        
+        tld_display_buffer_by_name(app, make_lit_string("*vc-status*"),
+                                   &buffer, &view, true, AccessAll);
+        proj->vcs->print_status(app, proj->source_dir, &view, &buffer);
     }
 }
 

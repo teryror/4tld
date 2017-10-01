@@ -91,6 +91,82 @@ CUSTOM_COMMAND_SIG(tld_open_line_upwards) {
     exec_command(app, auto_tab_line_at_cursor);
 }
 
+CUSTOM_COMMAND_SIG(tld_move_line_up) {
+    View_Summary view = get_active_view(app, AccessOpen);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessOpen);
+    
+    int start = seek_line_beginning(app, &buffer, view.cursor.pos);
+    int end = seek_line_end(app, &buffer, view.cursor.pos);
+    
+    if (start <= 0) {
+        return;
+    }
+    
+    if (end < buffer.size) {
+        end += 1;
+    }
+    
+    char line_text[4096];
+    if (end - start <= sizeof(line_text)) {
+        buffer_read_range(app, &buffer, start, end, line_text);
+        buffer_replace_range(app, &buffer, start, end, 0, 0);
+        
+        exec_command(app, move_up);
+        write_string(app, make_string(line_text, end - start));
+        exec_command(app, move_up);
+    }
+}
+
+CUSTOM_COMMAND_SIG(tld_move_line_down) {
+    View_Summary view = get_active_view(app, AccessOpen);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessOpen);
+    
+    int start = seek_line_beginning(app, &buffer, view.cursor.pos);
+    int end = seek_line_end(app, &buffer, view.cursor.pos);
+    
+    if (start < 0) {
+        start = 0;
+    }
+    
+    if (end < buffer.size) {
+        end += 1;
+    }
+    
+    char line_text[4096];
+    if (end - start <= sizeof(line_text)) {
+        buffer_read_range(app, &buffer, start, end, line_text);
+        buffer_replace_range(app, &buffer, start, end, 0, 0);
+        
+        exec_command(app, move_down);
+        write_string(app, make_string(line_text, end - start));
+        exec_command(app, move_up);
+    }
+}
+
+CUSTOM_COMMAND_SIG(tld_write_space_reflow_comment) {
+    View_Summary view = get_active_view(app, AccessOpen);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessProtected);
+    
+    if (buffer.is_lexed) {
+        if (view.cursor.character >= 80) {
+            int32_t beginning_of_line = -1;
+            buffer_seek_string_backward(app, &buffer, view.cursor.pos - 1, 0, literal("\n"), &beginning_of_line);
+            
+            if (beginning_of_line >= 0) {
+                buffer_seek_string_forward(app, &buffer, beginning_of_line, view.cursor.pos, literal("//"), &beginning_of_line);
+                
+                if (beginning_of_line < view.cursor.pos) {
+                    write_string(app, make_lit_string("\n// "));
+                    exec_command(app, auto_tab_line_at_cursor);
+                    return;
+                }
+            }
+        }
+    }
+    
+    exec_command(app, write_character);
+}
+
 // 
 // Navigation Commands
 // 
@@ -180,6 +256,15 @@ CUSTOM_COMMAND_SIG(tld_seek_end_of_scope) {
     }
     
     end_temp_memory(temp);
+}
+
+CUSTOM_COMMAND_SIG(tld_seek_indent_left) {
+    exec_command(app, seek_beginning_of_line);
+    
+    View_Summary view = get_active_view(app, AccessAll);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessAll);
+    
+    move_past_lead_whitespace(app, &view, &buffer);
 }
 
 CUSTOM_COMMAND_SIG(tld_seek_character_right) {

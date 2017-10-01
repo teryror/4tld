@@ -107,7 +107,7 @@ CUSTOM_COMMAND_SIG(nop) { }
 // TODO: Forward declare these instead, and move the actual bindings into 4tld_custom.cpp
 
 BIMODAL_COMMAND(modal_escape, tld_execute_arbitrary_command_fuzzy, tld_enter_cmd_mode)
-MODAL_COMMAND(modal_space, tld_exit_cmd_mode)
+BIMODAL_COMMAND(modal_space, tld_exit_cmd_mode, tld_write_space_reflow_comment)
 
 MODAL_COMMAND(modal_backtick, nop)
 MODAL_COMMAND(modal_1, nop)
@@ -144,7 +144,7 @@ MODAL_COMMAND(modal_d, delete_char)
 MODAL_COMMAND(modal_e, nop)
 MODAL_COMMAND(modal_f, tld_seek_character_right)
 MODAL_COMMAND(modal_g, nop)
-MODAL_COMMAND(modal_h, seek_beginning_of_textual_line) // TODO: seek_indent_left
+MODAL_COMMAND(modal_h, tld_seek_indent_left)
 MODAL_COMMAND(modal_i, move_up)
 MODAL_COMMAND(modal_j, move_left)
 MODAL_COMMAND(modal_k, move_down)
@@ -179,13 +179,13 @@ MODAL_COMMAND(modal_K, seek_whitespace_down)
 MODAL_COMMAND(modal_L, seek_alphanumeric_right)
 MODAL_COMMAND(modal_M, nop)
 MODAL_COMMAND(modal_N, nop)
-MODAL_COMMAND(modal_O, nop) // TODO: move_line_down
+MODAL_COMMAND(modal_O, tld_move_line_down)
 MODAL_COMMAND(modal_P, nop)
 MODAL_COMMAND(modal_Q, nop)
 MODAL_COMMAND(modal_R, nop)
 MODAL_COMMAND(modal_S, nop)
 MODAL_COMMAND(modal_T, nop)
-MODAL_COMMAND(modal_U, nop) // TODO: move_line_up
+MODAL_COMMAND(modal_U, tld_move_line_up)
 MODAL_COMMAND(modal_V, nop)
 MODAL_COMMAND(modal_W, nop)
 MODAL_COMMAND(modal_X, nop)
@@ -221,6 +221,7 @@ void tld_bind_modal_map(Bind_Helper *context, uint32_t mapid,
     begin_map(context, mapid);
     
     // Non-modal key combos:
+    bind(context, key_f5, MDFR_NONE, tld_project_show_vcs_status);
     bind(context, key_f7, MDFR_NONE, tld_build_project);
     bind(context, key_f8, MDFR_NONE, tld_test_project);
     bind(context, key_mouse_left, MDFR_NONE, click_set_cursor);

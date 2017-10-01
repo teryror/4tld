@@ -30,6 +30,9 @@ out the individual commands you want.
 #include "4tld_file_manager.cpp"
 #include "4tld_hex_viewer.cpp"
 #include "4tld_project_management.cpp"
+
+#include "4tld_vcs_git.cpp"
+
 #include "4tld_modal_bindings.cpp"
 
 TLDIT_BUILTIN_COMMAND_SIG(tld_terminal_cmd_goto_files) {
@@ -330,6 +333,11 @@ void tld_bind_keys(Bind_Helper *context) {
 }
 
 extern "C" int32_t get_bindings(void *data, int32_t size) {
+    // Do this here, rather than in START_HOOK, because that runs after the
+    // files are opened - too late, since our OPEN_FILE_HOOK needs this to be
+    // initialized.
+    tld_project_register_version_control_system(&tld_version_control_system_git);
+    
     Bind_Helper context_local = begin_bind_helper(data, size);
     Bind_Helper *context = &context_local;
     

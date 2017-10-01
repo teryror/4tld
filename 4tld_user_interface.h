@@ -154,6 +154,208 @@ void tld_display_buffer_by_name(Application_Links *app, String buffer_name,
 }
 
 // 
+// Query Bar Utilities
+// 
+
+static inline void
+tldui_append_s_clipboad(Application_Links * app, String * text) {
+    char * append_pos = text->str + text->size;
+    int32_t append_mem = text->memory_size - text->size;
+    int32_t append_size = clipboard_index(app, 0, 0, append_pos, append_mem);
+    
+    if (append_size < append_mem) {
+        text->size += append_size;
+    }
+}
+
+static inline void
+tldui_append_s_input(String * text, User_Input in) {
+    uint8_t character[4];
+    uint32_t length = to_writable_character(in, character);
+    if (length != 0 && text->memory_size - text->size > (int32_t)length) {
+        append_ss(text, make_string(character, length));
+    }
+}
+
+static void
+tld_handle_query_bar_input(Application_Links *app,
+                           Query_Bar *bar,
+                           User_Input input)
+{
+    if (input.key.keycode == key_back) {
+        backspace_utf8(&bar->string);
+    } else if (input.key.keycode == key_del) {
+        bar->string.size = 0;
+    } else if (input.key.keycode == 'v' && input.key.modifiers[MDFR_ALT]) {
+        tldui_append_s_clipboad(app, &bar->string);
+    } else if (key_is_unmodified(&input.key)) {
+        tldui_append_s_input(&bar->string, input);
+    }
+}
+
+// 
+// UI Printing
+// 
+
+static inline Range
+tldui_print_text(Application_Links *app, Buffer_Summary *buffer, char *text, int32_t len) {
+    Range result = make_range(buffer->size, buffer->size + len);
+    buffer_replace_range(app, buffer, buffer->size, buffer->size, text, len);
+    return result;
+}
+
+static inline Range
+tldui_update_dynamic_text(Application_Links *app, Buffer_Summary *buffer,
+                          String text, Range text_loc)
+{
+    Range result = text_loc;
+    static const char padding[] = "                                "; // 32 Spaces
+    buffer_replace_range(app, buffer,
+                         text_loc.min, text_loc.min + text.memory_size,
+                         text.str, text.size);
+    result.max = text_loc.min + text.size;
+    
+    int32_t remaining = text.memory_size - text.size;
+    buffer_replace_range(app, buffer, result.max, result.max,
+                         (char *) padding, remaining % 32);
+    
+    for (int i = 0; i < remaining / 32; ++i) {
+        buffer_replace_range(app, buffer, result.max, result.max,
+                             (char *) padding, 32);
+    }
+    
+    return result;
+}
+
+static inline Range
+tldui_print_dynamic_text(Application_Links *app, Buffer_Summary *buffer, String text) {
+    Assert(text.memory_size);
+    return tldui_update_dynamic_text(app, buffer, text, make_range(buffer->size, buffer->size));
+}
+
+enum tldui_update_result {
+    tldui_update_cancel,
+    tldui_update_accept,
+    tldui_update_next,
+    
+    tldui_update_result_count
+};
+
+static inline tldui_update_result
+tldui_query_dynamic_text(Application_Links *app, View_Summary *view, Buffer_Summary *buffer,
+                         String * text, Range * text_loc)
+{
+    view_set_highlight(app, view, 0, 0, 0);
+    
+    while (true) {
+        view_set_mark(
+            app, view, seek_pos(text_loc->min));
+        view_set_cursor(
+            app, view, seek_pos(text_loc->max), false);
+        User_Input in = get_user_input(app, EventOnAnyKey, EventOnEsc);
+        
+        if (in.abort) {
+            return tldui_update_cancel;
+        } else if (in.type != UserInputKey) {
+            continue;
+        }
+        
+        if (in.key.keycode == key_back) {
+            backspace_utf8(text);
+        } else if (in.key.keycode == key_del) {
+            text->size = 0;
+        } else if (in.key.keycode == 'v' && in.key.modifiers[MDFR_ALT]) {
+            tldui_append_s_clipboad(app, text);
+        } else if (in.key.keycode == '\n') {
+            return tldui_update_accept;
+        } else if (in.key.keycode == '\t') {
+            return tldui_update_next;
+        } else if (key_is_unmodified(&in.key)) {
+            tldui_append_s_input(text, in);
+        }
+        
+        *text_loc = tldui_update_dynamic_text(app, buffer, *text, *text_loc);
+    }
+}
+
+static inline Range
+tldui_print_checkbox(Application_Links *app, Buffer_Summary *buffer,
+                     char * label, int32_t label_length, bool32 state)
+{
+    Range result = make_range(buffer->size, buffer->size);
+    
+    if (state) {
+        buffer_replace_range(app, buffer, buffer->size, buffer->size, literal("[x] "));
+    } else {
+        buffer_replace_range(app, buffer, buffer->size, buffer->size, literal("[ ] "));
+    }
+    
+    buffer_replace_range(app, buffer, buffer->size, buffer->size, label, label_length);
+    result.max += label_length + 4;
+    
+    return result;
+}
+
+static inline void
+tldui_toggle_checkbox(Application_Links *app, Buffer_Summary *buffer,
+                      Range checkbox, bool32 *state)
+{
+    *state = !(*state);
+    if (*state) {
+        buffer_replace_range(app, buffer, checkbox.min, checkbox.min + 3, literal("[x]"));
+    } else {
+        buffer_replace_range(app, buffer, checkbox.min, checkbox.min + 3, literal("[ ]"));
+    }
+}
+
+struct tldui_table_printer {
+    Buffer_Summary *target;
+    int32_t column_width;
+    int32_t current_column;
+    int32_t column_count;
+};
+
+static tldui_table_printer
+tldui_make_table(Buffer_Summary * target_buffer, uint32_t column_width, int32_t column_count) {
+    tldui_table_printer result;
+    
+    result.target = target_buffer;
+    result.column_width = column_width;
+    result.column_count = column_count;
+    result.current_column = 0;
+    
+    return result;
+}
+
+static Range
+tldui_print_table_cell(Application_Links *app, tldui_table_printer *printer, String text) {
+    Assert(printer->column_width <= 40);
+    const char spaces[41] = "                                        ";
+    
+    int32_t max_width = printer->column_count * printer->column_width;
+    int32_t projected_width = printer->current_column * printer->column_width + text.size;
+    
+    if (printer->current_column > 0 && projected_width > max_width) {
+        buffer_replace_range(app, printer->target, printer->target->size,
+                             printer->target->size, literal("\n"));
+        printer->current_column = 0;
+    }
+    
+    Range result;
+    result.min = printer->target->size;
+    result.max = result.min + text.size;
+    
+    buffer_replace_range(app, printer->target, printer->target->size,
+                         printer->target->size, expand_str(text));
+    buffer_replace_range(app, printer->target, printer->target->size,
+                         printer->target->size, (char *) &spaces,
+                         printer->column_width - (text.size % printer->column_width));
+    
+    printer->current_column += 1 + text.size / printer->column_width;
+    return result;
+}
+
+// 
 // Fuzzy String Matching
 // 
 
