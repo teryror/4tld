@@ -289,10 +289,10 @@ tldfr_interactive_search(Application_Links *app,
             if (in.mouse.release_l && !in.mouse.out_of_window) {
                 float rx = 0, ry = 0;
                 if (global_point_to_view_point(target_view, in.mouse.x, in.mouse.y, &rx, &ry)) {
-                    Partial_Cursor click_pos = {0};
-                    if (buffer_compute_cursor(app, ui_buffer,
-                                              seek_xy(rx, ry, false, true),
-                                              &click_pos))
+                    Full_Cursor click_pos = {0};
+                    if (view_compute_cursor(app, ui_view,
+                                            seek_xy(rx, ry, false, true),
+                                            &click_pos))
                     {
                         int32_t pos = click_pos.pos;
                         if (pos >= ui.find_string_box.min && pos <= ui.find_string_box.max) {

@@ -473,22 +473,27 @@ CUSTOM_COMMAND_SIG(tld_files_click_select) {
     
     int32_t old_selection = tld_files_state.selected_index;
     if (global_point_to_view_point(&view, mouse.x, mouse.y, &rx, &ry)) {
-        view_set_cursor(app, &view, seek_xy(rx, ry, 1, view.unwrapped_lines), 0);
-        int32_t pos = view.cursor.pos;
-        
-        for (int i = 0; i < tld_files_state.entry_count; ++i) {
-            if (tld_files_state.cells[i].min <= pos &&
-                pos <= tld_files_state.cells[i].max)
-            {
-                tld_files_state.selected_index = i;
-                break;
+        Full_Cursor click_pos = {0};
+        if (view_compute_cursor(app, &view, seek_xy(rx, ry, 1, view.unwrapped_lines), &click_pos)) {
+            int32_t selected_index = -1;
+            
+            for (int i = 0; i < tld_files_state.entry_count; ++i) {
+                if (tld_files_state.cells[i].min <= click_pos.pos &&
+                    click_pos.pos <= tld_files_state.cells[i].max)
+                {
+                    selected_index = i;
+                    break;
+                }
             }
-        }
-        
-        if (old_selection == tld_files_state.selected_index) {
-            exec_command(app, tld_files_open_selected);
-        } else {
-            tld_files_view_update_highlight(app, &view, &tld_files_state);
+            
+            if (selected_index < 0) return;
+            tld_files_state.selected_index = selected_index;
+            
+            if (old_selection == tld_files_state.selected_index) {
+                exec_command(app, tld_files_open_selected);
+            } else {
+                tld_files_view_update_highlight(app, &view, &tld_files_state);
+            }
         }
     }
 }
