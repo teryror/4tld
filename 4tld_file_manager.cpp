@@ -462,6 +462,37 @@ CUSTOM_COMMAND_SIG(tld_files_open_selected) {
     tld_files_view_update_highlight(app, &view, &tld_files_state);
 }
 
+CUSTOM_COMMAND_SIG(tld_files_click_select) {
+    if (tld_files_state.cells == 0) return;
+    
+    View_Summary view = get_active_view(app, AccessAll);
+    Buffer_Summary buffer = get_buffer(app, view.buffer_id, AccessAll);
+    
+    Mouse_State mouse = get_mouse_state(app);
+    float rx = 0, ry = 0;
+    
+    int32_t old_selection = tld_files_state.selected_index;
+    if (global_point_to_view_point(&view, mouse.x, mouse.y, &rx, &ry)) {
+        view_set_cursor(app, &view, seek_xy(rx, ry, 1, view.unwrapped_lines), 0);
+        int32_t pos = view.cursor.pos;
+        
+        for (int i = 0; i < tld_files_state.entry_count; ++i) {
+            if (tld_files_state.cells[i].min <= pos &&
+                pos <= tld_files_state.cells[i].max)
+            {
+                tld_files_state.selected_index = i;
+                break;
+            }
+        }
+        
+        if (old_selection == tld_files_state.selected_index) {
+            exec_command(app, tld_files_open_selected);
+        } else {
+            tld_files_view_update_highlight(app, &view, &tld_files_state);
+        }
+    }
+}
+
 CUSTOM_COMMAND_SIG(tld_files_goto_parent_directory) {
     if (tld_files_state.cells == 0) return;
     
@@ -592,9 +623,7 @@ tld_files_bind_map(Bind_Helper *context, uint32_t mapid) {
     
     begin_map(context, mapid);
     
-    /* TODO: Mouse Support
     bind(context, key_mouse_left, MDFR_NONE, tld_files_click_select);
-    */
     
     bind(context, 'j', MDFR_NONE, tld_files_move_left);
     bind(context, 'l', MDFR_NONE, tld_files_move_right);
