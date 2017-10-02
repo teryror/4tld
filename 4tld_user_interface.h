@@ -68,8 +68,6 @@ tldui_display_buffer(Application_Links *app, Buffer_ID buffer, bool prefer_inact
             if (!result.exists) {
                 result = get_view_first(app, AccessAll);
             }
-            
-            set_active_view(app, &result);
         }
     } else if (prefer_inactive_view) {
         open_view(app, &result, ViewSplit_Right);
@@ -77,6 +75,7 @@ tldui_display_buffer(Application_Links *app, Buffer_ID buffer, bool prefer_inact
     }
     
     view_set_buffer(app, &result, buffer, 0);
+    set_active_view(app, &result);
     return result;
 }
 

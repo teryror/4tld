@@ -283,6 +283,7 @@ tldfr_interactive_search(Application_Links *app,
         }
         
         if (in.abort) {
+            close_view(app, ui_view);
             view_set_highlight(app, target_view, 0, 0, 0);
             break;
         } else if (in.type == UserInputMouse) {
@@ -410,10 +411,11 @@ tldfr_interactive_search(Application_Links *app,
                     set.count = 1;
                     kill_buffer(app, buffer_identifier(ui_buffer->buffer_id),
                                 0, BufferKill_AlwaysKill);
+                    close_view(app, ui_view);
                     *ui_buffer = tldui_get_empty_buffer_by_name(
                         app, literal("*search-results*"), true, true, AccessAll);
                     tldfr_list_all_matches(app, ui_buffer, &global_part, &set, &iter);
-                    view_set_buffer(app, target_view, ui_buffer->buffer_id, 0);
+                    tldui_display_buffer(app, ui_buffer->buffer_id, true);
                     return;
                 } else if (in.key.keycode == 'A') {
                     Search_Iter iter = {0};
@@ -443,10 +445,11 @@ tldfr_interactive_search(Application_Links *app,
                     set.count = j;
                     kill_buffer(app, buffer_identifier(ui_buffer->buffer_id),
                                 0, BufferKill_AlwaysKill);
+                    close_view(app, ui_view);
                     *ui_buffer = tldui_get_empty_buffer_by_name(
                         app, literal("*search-results*"), true, true, AccessAll);
                     tldfr_list_all_matches(app, ui_buffer, &global_part, &set, &iter);
-                    view_set_buffer(app, target_view, ui_buffer->buffer_id, 0);
+                    tldui_display_buffer(app, ui_buffer->buffer_id, true);
                     return;
                 }
             } break;
@@ -533,7 +536,6 @@ CUSTOM_COMMAND_SIG(tld_find_and_replace) {
     tldfr_interactive_search(app, &ui_view, &ui_buffer,
                              &target_view, &target_buffer, &search,
                              TldSearchState_SearchKeyInput, &start_pos);
-    close_view(app, &ui_view);
 }
 
 // TODO: Rethink how commands should be structured

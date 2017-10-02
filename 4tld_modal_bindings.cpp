@@ -91,6 +91,7 @@ CUSTOM_COMMAND_SIG(tld_replace_individual_character) {
 
 // 
 // Bindings
+// NOTE: Forward declare these, the actual bindings happen in 4tld_custom.cpp
 // 
 
 #define BIMODAL_COMMAND(name, modal_command, command)                 \
@@ -104,112 +105,112 @@ CUSTOM_COMMAND_SIG(name) {                                            \
 // This is useful for binding modal keys that only function in one mode (i.e. temporary bindings)
 CUSTOM_COMMAND_SIG(nop) { }
 
-// TODO: Forward declare these instead, and move the actual bindings into 4tld_custom.cpp
+CUSTOM_COMMAND_SIG(modal_escape);
+CUSTOM_COMMAND_SIG(modal_space);
 
-BIMODAL_COMMAND(modal_escape, tld_execute_arbitrary_command_fuzzy, tld_enter_cmd_mode)
-BIMODAL_COMMAND(modal_space, tld_exit_cmd_mode, tld_write_space_reflow_comment)
+CUSTOM_COMMAND_SIG(modal_backtick);
+CUSTOM_COMMAND_SIG(modal_1);
+CUSTOM_COMMAND_SIG(modal_2);
+CUSTOM_COMMAND_SIG(modal_3);
+CUSTOM_COMMAND_SIG(modal_4);
+CUSTOM_COMMAND_SIG(modal_5);
+CUSTOM_COMMAND_SIG(modal_6);
+CUSTOM_COMMAND_SIG(modal_7);
+CUSTOM_COMMAND_SIG(modal_8);
+CUSTOM_COMMAND_SIG(modal_9);
+CUSTOM_COMMAND_SIG(modal_0);
+CUSTOM_COMMAND_SIG(modal_dash);
+CUSTOM_COMMAND_SIG(modal_equals);
 
-MODAL_COMMAND(modal_backtick, nop)
-MODAL_COMMAND(modal_1, nop)
-MODAL_COMMAND(modal_2, nop)
-MODAL_COMMAND(modal_3, nop)
-MODAL_COMMAND(modal_4, nop)
-MODAL_COMMAND(modal_5, nop)
-MODAL_COMMAND(modal_6, nop)
-MODAL_COMMAND(modal_7, nop)
-MODAL_COMMAND(modal_8, nop)
-MODAL_COMMAND(modal_9, nop)
-MODAL_COMMAND(modal_0, nop)
-MODAL_COMMAND(modal_dash, nop)
-MODAL_COMMAND(modal_equals, nop)
+CUSTOM_COMMAND_SIG(modal_tilde);
+CUSTOM_COMMAND_SIG(modal_exclamation_mark);
+CUSTOM_COMMAND_SIG(modal_at);
+CUSTOM_COMMAND_SIG(modal_pound);
+CUSTOM_COMMAND_SIG(modal_dollar);
+CUSTOM_COMMAND_SIG(modal_percent);
+CUSTOM_COMMAND_SIG(modal_caret);
+CUSTOM_COMMAND_SIG(modal_and);
+CUSTOM_COMMAND_SIG(modal_asterisk);
+CUSTOM_COMMAND_SIG(modal_open_paren);
+CUSTOM_COMMAND_SIG(modal_close_paren);
+CUSTOM_COMMAND_SIG(modal_lodash);
+CUSTOM_COMMAND_SIG(modal_plus);
 
-MODAL_COMMAND(modal_tilde, nop)
-MODAL_COMMAND(modal_exclamation_mark, nop)
-MODAL_COMMAND(modal_at, nop)
-MODAL_COMMAND(modal_pound, nop)
-MODAL_COMMAND(modal_dollar, nop)
-MODAL_COMMAND(modal_percent, nop)
-MODAL_COMMAND(modal_caret, nop)
-MODAL_COMMAND(modal_and, nop)
-MODAL_COMMAND(modal_asterisk, nop)
-MODAL_COMMAND(modal_open_paren, nop)
-MODAL_COMMAND(modal_close_paren, nop)
-MODAL_COMMAND(modal_lodash, nop)
-MODAL_COMMAND(modal_plus, nop)
+CUSTOM_COMMAND_SIG(modal_a);
+CUSTOM_COMMAND_SIG(modal_b);
+CUSTOM_COMMAND_SIG(modal_c);
+CUSTOM_COMMAND_SIG(modal_d);
+CUSTOM_COMMAND_SIG(modal_e);
+CUSTOM_COMMAND_SIG(modal_f);
+CUSTOM_COMMAND_SIG(modal_g);
+CUSTOM_COMMAND_SIG(modal_h);
+CUSTOM_COMMAND_SIG(modal_i);
+CUSTOM_COMMAND_SIG(modal_j);
+CUSTOM_COMMAND_SIG(modal_k);
+CUSTOM_COMMAND_SIG(modal_l);
+CUSTOM_COMMAND_SIG(modal_m);
+CUSTOM_COMMAND_SIG(modal_n);
+CUSTOM_COMMAND_SIG(modal_o);
+CUSTOM_COMMAND_SIG(modal_p);
+CUSTOM_COMMAND_SIG(modal_q);
+CUSTOM_COMMAND_SIG(modal_r);
+CUSTOM_COMMAND_SIG(modal_s);
+CUSTOM_COMMAND_SIG(modal_t);
+CUSTOM_COMMAND_SIG(modal_u);
+CUSTOM_COMMAND_SIG(modal_v);
+CUSTOM_COMMAND_SIG(modal_w);
+CUSTOM_COMMAND_SIG(modal_x);
+CUSTOM_COMMAND_SIG(modal_y);
+CUSTOM_COMMAND_SIG(modal_z);
+CUSTOM_COMMAND_SIG(modal_return);
 
-MODAL_COMMAND(modal_a, nop)
-MODAL_COMMAND(modal_b, nop)
-MODAL_COMMAND(modal_c, duplicate_line)
-MODAL_COMMAND(modal_d, delete_char)
-MODAL_COMMAND(modal_e, nop)
-MODAL_COMMAND(modal_f, tld_seek_character_right)
-MODAL_COMMAND(modal_g, nop)
-MODAL_COMMAND(modal_h, tld_seek_indent_left)
-MODAL_COMMAND(modal_i, move_up)
-MODAL_COMMAND(modal_j, move_left)
-MODAL_COMMAND(modal_k, move_down)
-MODAL_COMMAND(modal_l, move_right)
-MODAL_COMMAND(modal_m, nop)
-MODAL_COMMAND(modal_n, tld_write_individual_character)
-MODAL_COMMAND(modal_o, tld_open_line)
-MODAL_COMMAND(modal_p, nop)
-MODAL_COMMAND(modal_q, nop)
-MODAL_COMMAND(modal_r, tld_replace_individual_character)
-MODAL_COMMAND(modal_s, nop)
-MODAL_COMMAND(modal_t, nop)
-MODAL_COMMAND(modal_u, tld_open_line_upwards)
-MODAL_COMMAND(modal_v, nop)
-MODAL_COMMAND(modal_w, tld_select_token)
-MODAL_COMMAND(modal_x, delete_line)
-MODAL_COMMAND(modal_y, nop)
-MODAL_COMMAND(modal_z, nop)
-BIMODAL_COMMAND(modal_return, nop, write_and_auto_tab)
+CUSTOM_COMMAND_SIG(modal_A);
+CUSTOM_COMMAND_SIG(modal_B);
+CUSTOM_COMMAND_SIG(modal_C);
+CUSTOM_COMMAND_SIG(modal_D);
+CUSTOM_COMMAND_SIG(modal_E);
+CUSTOM_COMMAND_SIG(modal_F);
+CUSTOM_COMMAND_SIG(modal_G);
+CUSTOM_COMMAND_SIG(modal_H);
+CUSTOM_COMMAND_SIG(modal_I);
+CUSTOM_COMMAND_SIG(modal_J);
+CUSTOM_COMMAND_SIG(modal_K);
+CUSTOM_COMMAND_SIG(modal_H);
+CUSTOM_COMMAND_SIG(modal_I);
+CUSTOM_COMMAND_SIG(modal_L);
+CUSTOM_COMMAND_SIG(modal_M);
+CUSTOM_COMMAND_SIG(modal_N);
+CUSTOM_COMMAND_SIG(modal_O);
+CUSTOM_COMMAND_SIG(modal_P);
+CUSTOM_COMMAND_SIG(modal_Q);
+CUSTOM_COMMAND_SIG(modal_R);
+CUSTOM_COMMAND_SIG(modal_S);
+CUSTOM_COMMAND_SIG(modal_T);
+CUSTOM_COMMAND_SIG(modal_U);
+CUSTOM_COMMAND_SIG(modal_V);
+CUSTOM_COMMAND_SIG(modal_W);
+CUSTOM_COMMAND_SIG(modal_X);
+CUSTOM_COMMAND_SIG(modal_Y);
+CUSTOM_COMMAND_SIG(modal_Z);
 
-MODAL_COMMAND(modal_A, nop)
-MODAL_COMMAND(modal_B, nop)
-MODAL_COMMAND(modal_C, nop)
-MODAL_COMMAND(modal_D, delete_word)
-MODAL_COMMAND(modal_E, nop)
-MODAL_COMMAND(modal_F, tld_seek_character_left)
-MODAL_COMMAND(modal_G, nop)
-MODAL_COMMAND(modal_H, nop)
-MODAL_COMMAND(modal_I, seek_whitespace_up)
-MODAL_COMMAND(modal_J, seek_alphanumeric_left)
-MODAL_COMMAND(modal_K, seek_whitespace_down)
-MODAL_COMMAND(modal_L, seek_alphanumeric_right)
-MODAL_COMMAND(modal_M, nop)
-MODAL_COMMAND(modal_N, nop)
-MODAL_COMMAND(modal_O, tld_move_line_down)
-MODAL_COMMAND(modal_P, nop)
-MODAL_COMMAND(modal_Q, nop)
-MODAL_COMMAND(modal_R, nop)
-MODAL_COMMAND(modal_S, nop)
-MODAL_COMMAND(modal_T, nop)
-MODAL_COMMAND(modal_U, tld_move_line_up)
-MODAL_COMMAND(modal_V, nop)
-MODAL_COMMAND(modal_W, nop)
-MODAL_COMMAND(modal_X, nop)
-MODAL_COMMAND(modal_Y, nop)
-MODAL_COMMAND(modal_Z, nop)
+CUSTOM_COMMAND_SIG(modal_tab);
+CUSTOM_COMMAND_SIG(modal_open_bracket);
+CUSTOM_COMMAND_SIG(modal_close_bracket);
+CUSTOM_COMMAND_SIG(modal_semicolon);
+CUSTOM_COMMAND_SIG(modal_single_quote);
+CUSTOM_COMMAND_SIG(modal_backslash);
+CUSTOM_COMMAND_SIG(modal_comma);
+CUSTOM_COMMAND_SIG(modal_period);
+CUSTOM_COMMAND_SIG(modal_slash);
 
-MODAL_COMMAND(modal_tab, tld_panels_switch_or_create)
-MODAL_COMMAND(modal_open_bracket, tld_seek_beginning_of_scope)
-MODAL_COMMAND(modal_close_bracket, tld_seek_end_of_scope)
-MODAL_COMMAND(modal_semicolon, seek_end_of_line)
-MODAL_COMMAND(modal_single_quote, nop)
-MODAL_COMMAND(modal_backslash, nop)
-MODAL_COMMAND(modal_comma, cursor_mark_swap)
-MODAL_COMMAND(modal_period, set_mark)
-MODAL_COMMAND(modal_slash, nop)
-
-MODAL_COMMAND(modal_open_brace, nop)
-BIMODAL_COMMAND(modal_close_brace, nop, write_and_auto_tab)
-MODAL_COMMAND(modal_colon, nop)
-MODAL_COMMAND(modal_double_quote, nop)
-MODAL_COMMAND(modal_pipe, nop)
-MODAL_COMMAND(modal_open_angle, nop)
-MODAL_COMMAND(modal_close_angle, nop)
-MODAL_COMMAND(modal_question_mark, nop)
+CUSTOM_COMMAND_SIG(modal_open_brace);
+CUSTOM_COMMAND_SIG(modal_close_brace);
+CUSTOM_COMMAND_SIG(modal_colon);
+CUSTOM_COMMAND_SIG(modal_double_quote);
+CUSTOM_COMMAND_SIG(modal_pipe);
+CUSTOM_COMMAND_SIG(modal_open_angle);
+CUSTOM_COMMAND_SIG(modal_close_angle);
+CUSTOM_COMMAND_SIG(modal_question_mark);
 
 void tld_bind_modal_map(Bind_Helper *context, uint32_t mapid,
                         String insert_mode_theme_name,

@@ -567,12 +567,13 @@ static int32_t tld_files_directory_stack_size = 0;
 CUSTOM_COMMAND_SIG(tld_files_directory_push) {
     if (tld_files_directory_stack_size >= TLD_FILES_DIR_STACK_CAP) return;
     
-    tld_files_directory_stack[tld_files_directory_stack_size].str = (char *)malloc(1024);
-    tld_files_directory_stack[tld_files_directory_stack_size].memory_size = 1024;
-    tld_files_directory_stack[tld_files_directory_stack_size].size =
-        directory_get_hot(app,
-                          tld_files_directory_stack[tld_files_directory_stack_size].str, tld_files_directory_stack[tld_files_directory_stack_size].memory_size);
+    String hot_dir = {0};
     
+    hot_dir.memory_size = 1024;
+    hot_dir.str = (char *) malloc(hot_dir.memory_size);
+    hot_dir.size = directory_get_hot(app, hot_dir.str, hot_dir.memory_size);
+    
+    tld_files_directory_stack[tld_files_directory_stack_size] = hot_dir;
     tld_files_directory_stack_size += 1;
 }
 
